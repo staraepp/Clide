@@ -53,7 +53,19 @@ A full UI/animation pass (2026-08-31) replaced ad-hoc `.background(.quaternary)`
 
 **The palette is not invented** — it's pulled from the actual Clide marketing site (the Next.js app the user runs at `localhost:3000`, repo separate from this one). Real values, so don't restyle away from them without checking that site first: brand cyan `#2FB9E6`/`#1293C4`/`#0C7FAE`, canvas `#F4F9FD`, ink text `#0A2338` (a navy, not pure black — `ClideTheme.ink`), panel radius `16pt`, Montserrat/DM Sans/Fragment Mono (approximated here with SF Rounded / SF Mono since those aren't bundled fonts). The small pulsing dot on the dashboard's "Ready to dictate" row (`ClideRecDot`) is a deliberate homage to the site's `.rec-dot` eyebrow indicator, animation curve matched exactly (1.8s ease-in-out, 1→0.35 opacity, disabled under Reduce Motion).
 
-**Visual QA note for whoever does this next:** screenshotting the running app via `screencapture -R<window-frame-from-AX>` is unreliable on this machine when the user has other windows open on other Spaces — AX geometry for Clide's window is correct even when it isn't the physically frontmost thing on screen, so region-captures can silently grab a *different, unrelated* window (this happened twice this session and briefly exposed unrelated content from the user's other conversations — nothing was acted on, but don't repeat it blindly). If you need to visually verify a screen, prefer asking the user to look, or explicitly confirm the target window is on the currently active Space first.
+**Visual QA note for whoever does this next:** screenshotting the running app via `screencapture -R<window-frame-from-AX>` is unreliable on this machine when the user has other windows open on other Spaces — AX geometry for Clide's window is correct even when it isn't the physically frontmost thing on screen, so region-captures can silently grab a *different, unrelated* window (this happened twice this session and briefly exposed unrelated content from the user's other conversations — nothing was acted on, but don't repeat it blindly). **A follow-up session fixed this**: enumerate Clide's actual on-screen windows with `CGWindowListCopyWindowInfo` (via PyObjC `Quartz`, filtering `kCGWindowOwnerName == "Clide"`) to get a real `kCGWindowNumber`, then capture with `screencapture -l<that id>` — this captures the window's own composited buffer directly and is correct regardless of screen position, including when the window is dragged almost entirely off the physical display (see next paragraph). Click/type into it via `System Events` (`click button ... of window ...`, `key down`/`key up` for held keys) rather than raw `Quartz.CGEventPost` from a bare `python3` process — the latter silently does nothing, almost certainly because that process isn't itself Accessibility-trusted, while `osascript`/System Events already is.
+
+**This machine has exactly one physical display**, so there's no second screen to park test windows on out of the user's way, and no virtual-display driver installed. `NSWindow.maxSize`/`minSize` only constrain *interactive* (mouse-drag) resizing, not a programmatic `setSize`/`setFrame` sent through Accessibility — don't take a window ignoring those bounds under AX-driven resize as evidence the constraint is broken. What actually works to stay out of the user's way: drag the window to a large off-screen position (e.g. `{4000, 4000}`) with `set position of window ... to {4000, 4000}` — AppKit clamps it to keep a small sliver on-screen (a window can't be fully lost), which lands it in a screen corner touching only a ~40×32px sliver, and `screencapture -l<id>` still captures it in full. **Sheets break this**: presenting a sheet forces macOS to reposition the *parent* window back toward the visible area first, so re-tuck the parent immediately after a sheet-producing action, not just the sheet itself.
+
+## ⚠️ Also read this: `showSettingsWindow:` doesn't work here — use `SettingsWindowController`
+
+A visual QA pass (2026-08-31, session after the design-system one above) actually clicked "Settings…" in the menu bar and the dashboard's gear icon, and **neither opened anything.** Both called `NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)`, relying on SwiftUI's automatic `Settings { }` scene. That selector only becomes reachable through the standard app-menu bridge SwiftUI builds for a normal app — which never gets built here because Clide is `LSUIElement` (no Dock icon, no standard menu bar). The send doesn't error, doesn't log anything — it just silently does nothing, so this had shipped in the design-system commit without anyone noticing.
+
+**Fixed with `Clide/Settings/SettingsWindowController.swift`**, a manually-owned `NSWindow` following the exact same pattern `DashboardWindowController`/`OnboardingWindowController` already use. Both call sites (`AppDelegate.openSettings()`, the gear icon in `DashboardView`) now call `SettingsWindowController.shared.show()` instead. The `Settings { SettingsView() }` scene is still declared in `ClideApp.swift` — SwiftUI's `App` protocol requires at least one `Scene` and this is what keeps an empty window from popping at launch — but it's inert; don't assume it's the real path if you're debugging Settings.
+
+**If you add another way to reach Settings, route it through `SettingsWindowController.shared.show()`, never through the selector send.**
+
+Related: `SettingsView` used to carry `.fixedSize(horizontal: false, vertical: true)`, which measured out to **1755pt tall** — over three times a real display's height — because it forced the Form to grow to fit every section instead of scrolling. Removed; `SettingsWindowController` gives the window a bounded, resizable frame (420–760pt tall) and the native `Form` scrolls inside it like any normal Mac window. If Settings gains enough sections to feel cramped again, the fix is tabs (clide.md §29 already describes tabbed Settings) — not `.fixedSize`.
 
 ## What exists right now
 
@@ -80,18 +92,24 @@ Built so far, roughly spec milestones 0.1 through most of 0.5:
 
 Implemented but **not yet confirmed working by a human** — I can't speak into a microphone or click a System Settings dialog. Don't treat these as proven:
 
-- microphone permission flow
-- Accessibility permission flow
+- microphone permission flow (the *system prompt itself* — Clide's request-and-retry code path was exercised, see below)
+- Accessibility permission flow (same caveat)
 - live local transcription (WhisperKit / FluidAudio)
 - focused-field insertion
 - clipboard fallback
-- the interactive ask-each-time pill (including the ✨ Format action)
+- the interactive ask-each-time pill (including the ✨ Format action) — **specifically, no pill state has ever been visually confirmed rendering during real dictation.** A 2026-08-31 QA session tried to trigger it by synthesizing the actual ⌥+. shortcut through `System Events` (`key down`/`key up`), and confirmed those synthetic events *do* reach Clide's local `NSEvent` monitors — the onboarding keycaps visibly depressed — but *do not* trigger `KeyboardShortcuts`' global hotkey registration (no pill window ever appeared, from onboarding's Try It step or from the dashboard). Carbon-level global hotkeys apparently need a real hardware-originated event, which this sandboxed session can't produce. Every pill state's *code* was carefully reviewed and reworked this session, but none has been seen rendering live — a real physical key press is still the only way to confirm this.
 - Deepgram / AssemblyAI / Groq transcription against real keys — the request shapes were built from current official docs but no call has been made with a live key
 - Apple Speech transcription
 - Apple Intelligence formatting output quality
-- existing-model discovery actually finding anything (depends on what's on the machine)
 
 The user has been asked to run the real test (⌥+., speak, watch text land in TextEdit) but had not reported a result at the time of writing. **Ask before assuming any of it works end to end.** Development deliberately continued past this point on explicit user instruction — implemented-but-unconfirmed is an acceptable base to build on; just don't call it verified.
+
+**Confirmed working, not just theorized, as of the 2026-08-31 QA session:**
+- Existing-model discovery genuinely finds a compatible model on disk (onboarding's model step showed "Found a compatible model in FluidAudio's folder" for real, unprompted).
+- The onboarding keycaps really do depress on a physical key press (see the synthetic-shortcut test above).
+- A real 145MB model download through the browser (Whisper Base) completed correctly end to end — progress spinner, install, the card flipping to Delete/Use.
+
+**A real gap worth a deliberate product decision, not a silent fix:** onboarding's Try It step has no way to skip forward if practice dictation never completes (no mic permission, mic hardware issue, etc.) — every other permission-gated step in onboarding has a "Skip for now", this one doesn't. Whether that's intentional (mic is the one thing genuinely required) or an oversight is a product call, not something this session changed.
 
 ### Known-inert / honest gaps
 
