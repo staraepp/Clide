@@ -3,9 +3,11 @@ import ApplicationServices
 
 enum InsertionOutcome: Equatable {
     case insertedDirectly
-    case copiedToClipboard
-    /// Transcript is on the clipboard, but Clide couldn't paste it because
-    /// Accessibility access hasn't been granted.
+    /// Direct insertion didn't work for this field, so Clide pasted instead.
+    case copiedAfterInsertionFailed
+    /// Nothing editable was focused, so there was nowhere to insert.
+    case copiedUnsupportedField
+    /// Accessibility isn't granted, so Clide could neither type nor paste.
     case copiedNeedsAccessibility
     case secureFieldBlocked
     case failed(String)
@@ -28,7 +30,7 @@ enum TextInsertionService {
         }
 
         guard let focusedElement = focusedUIElement() else {
-            return pasteViaClipboard(text)
+            return pasteViaClipboard(text, outcome: .copiedUnsupportedField)
         }
 
         if isSecureField(focusedElement) {
@@ -39,7 +41,7 @@ enum TextInsertionService {
             return .insertedDirectly
         }
 
-        return pasteViaClipboard(text)
+        return pasteViaClipboard(text, outcome: .copiedAfterInsertionFailed)
     }
 
     // MARK: - Accessibility
@@ -83,7 +85,7 @@ enum TextInsertionService {
         pasteboard.setString(text, forType: .string)
     }
 
-    private static func pasteViaClipboard(_ text: String) -> InsertionOutcome {
+    private static func pasteViaClipboard(_ text: String, outcome: InsertionOutcome) -> InsertionOutcome {
         let pasteboard = NSPasteboard.general
         let previousContents = pasteboard.string(forType: .string)
 
@@ -103,7 +105,7 @@ enum TextInsertionService {
             }
         }
 
-        return pasted ? .copiedToClipboard : .failed("Couldn't paste transcript")
+        return pasted ? outcome : .failed("Clide couldn't paste the transcript.")
     }
 
     private static func synthesizePaste() -> Bool {

@@ -13,7 +13,8 @@ struct ModelCatalogTests {
 
     @Test func cloudModelsRequireAKeyAndLocalOnesDoNot() {
         for model in ModelCatalog.all {
-            #expect(model.requiresAPIKey == !model.isLocal)
+            let matches = model.requiresAPIKey == !model.isLocal
+            #expect(matches)
         }
     }
 

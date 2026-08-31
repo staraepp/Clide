@@ -69,13 +69,18 @@ final class DictationCoordinator {
             state = .listening
             startEscapeMonitor()
         } catch {
-            present(.error(error.localizedDescription), autoHideAfter: 3)
+            clideLog(.error, "audio", "Couldn't start capture: \(error.localizedDescription)")
+            present(.microphoneUnavailable(error.localizedDescription), autoHideAfter: 4)
         }
     }
 
     private func requestMicrophoneThenRetry() async {
         guard await PermissionsManager.requestMicrophoneAccess() else {
-            present(.error("Clide needs microphone access to dictate"), autoHideAfter: 3)
+            clideLog(.warning, "permissions", "Microphone access denied")
+            present(
+                .microphoneUnavailable("Clide needs microphone access — turn it on in System Settings"),
+                autoHideAfter: 5
+            )
             return
         }
         startListening()
@@ -113,6 +118,15 @@ final class DictationCoordinator {
         let startedAt = Date()
         do {
             let engine = modelManager.currentEngine()
+
+            // First use of a local model downloads it, which is slow enough
+            // that a silent "Transcribing…" would look stuck.
+            if model.isLocal, !modelManager.isInstalled(model) {
+                state = .modelLoading(model.displayName)
+                try await modelManager.prepare(model)
+            }
+
+            state = .transcribing
             let rawTranscript = try await engine.transcribe(samples: samples)
 
             // Word count, not content — see DiagnosticsLog's contract.
@@ -124,6 +138,7 @@ final class DictationCoordinator {
                     + "from \(String(format: "%.1f", speakingDuration))s of audio"
             )
 
+            state = .formatting
             let pipeline = TranscriptPipeline(
                 fillerRemovalMode: formattingPreferences.fillerRemovalMode,
                 aiFormattingMode: formattingPreferences.aiFormattingMode
@@ -146,7 +161,7 @@ final class DictationCoordinator {
             handle(TextInsertionService.insert(output.text))
         } catch {
             clideLog(.error, "transcribe", "\(model.id) failed: \(error.localizedDescription)")
-            present(.error(error.localizedDescription), autoHideAfter: 3)
+            present(.error(error.localizedDescription), autoHideAfter: 5)
         }
     }
 
@@ -181,9 +196,12 @@ final class DictationCoordinator {
         case .insertedDirectly:
             clideLog(.info, "insertion", "Inserted via Accessibility")
             present(.inserted, autoHideAfter: 1.2)
-        case .copiedToClipboard:
-            clideLog(.warning, "insertion", "Direct insertion unavailable; used clipboard fallback")
-            present(.copiedToClipboard, autoHideAfter: 2)
+        case .copiedAfterInsertionFailed:
+            clideLog(.warning, "insertion", "Field rejected direct insertion; pasted via clipboard")
+            present(.copiedAfterInsertionFailed, autoHideAfter: 2.5)
+        case .copiedUnsupportedField:
+            clideLog(.warning, "insertion", "No editable field focused; pasted via clipboard")
+            present(.copiedUnsupportedField, autoHideAfter: 2.5)
         case .copiedNeedsAccessibility:
             clideLog(.warning, "insertion", "Accessibility not granted; copied to clipboard only")
             present(.copiedNeedsAccessibility, autoHideAfter: 4)
