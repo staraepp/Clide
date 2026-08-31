@@ -146,7 +146,7 @@ final class DictationCoordinator {
                 fillerRemovalMode: formattingPreferences.fillerRemovalMode,
                 aiFormattingMode: formattingPreferences.aiFormattingMode
             )
-            let output = pipeline.process(rawTranscript)
+            let output = await pipeline.process(rawTranscript)
 
             statistics.record(transcript: output.text, speakingDuration: speakingDuration, model: model)
             history.record(
@@ -162,8 +162,8 @@ final class DictationCoordinator {
                 return
             }
 
-            if output.pendingChoices.contains(.removeFillers) {
-                offerFillerChoice(for: output.text)
+            if !output.pendingChoices.isEmpty {
+                offerCleanupChoices(for: output.text, choices: output.pendingChoices, pipeline: pipeline)
                 return
             }
 
@@ -177,7 +177,11 @@ final class DictationCoordinator {
     /// Ask-each-time: the pill offers the cleanup rather than a modal, and
     /// falls back to inserting the text as-is if the user doesn't answer —
     /// never leaving a finished transcript stranded.
-    private func offerFillerChoice(for text: String) {
+    private func offerCleanupChoices(
+        for text: String,
+        choices: Set<TranscriptPipeline.OptionalStep>,
+        pipeline: TranscriptPipeline
+    ) {
         let insert: (String) -> Void = { [weak self] finalText in
             guard let self else { return }
             self.choiceTimeoutTask?.cancel()
@@ -188,7 +192,12 @@ final class DictationCoordinator {
 
         hideTask?.cancel()
         pendingChoiceActions = PillChoiceActions(
-            removeFillers: { insert(FillerWordRemover.removeFillers(from: text)) },
+            removeFillers: choices.contains(.removeFillers)
+                ? { insert(FillerWordRemover.removeFillers(from: text)) }
+                : nil,
+            format: choices.contains(.aiFormat)
+                ? { [weak self] in self?.formatThenInsert(text, pipeline: pipeline, insert: insert) }
+                : nil,
             insertAsIs: { insert(text) }
         )
         state = .awaitingChoice
@@ -197,6 +206,27 @@ final class DictationCoordinator {
             try? await Task.sleep(for: .seconds(Self.choiceTimeout))
             guard !Task.isCancelled, self?.state == .awaitingChoice else { return }
             insert(text)
+        }
+    }
+
+    private func formatThenInsert(
+        _ text: String,
+        pipeline: TranscriptPipeline,
+        insert: @escaping (String) -> Void
+    ) {
+        choiceTimeoutTask?.cancel()
+        choiceTimeoutTask = nil
+        pendingChoiceActions = nil
+        state = .formatting
+
+        Task {
+            do {
+                insert(try await pipeline.formatter.format(text))
+            } catch {
+                // Formatting is optional — insert what we already have.
+                clideLog(.warning, "formatting", "Formatter failed: \(error.localizedDescription)")
+                insert(text)
+            }
         }
     }
 

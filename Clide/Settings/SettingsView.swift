@@ -10,6 +10,7 @@ struct SettingsView: View {
     @ObservedObject private var formatting = FormattingPreferences.shared
     @ObservedObject private var statistics = DictationStatistics.shared
     @ObservedObject private var history = TranscriptHistory.shared
+    private let formatter: TranscriptFormatter = AppleFormatter()
     @ObservedObject private var launchAtLogin = LaunchAtLogin.shared
     @ObservedObject private var developer = DeveloperSettings.shared
     @State private var isShowingConsole = false
@@ -104,10 +105,17 @@ struct SettingsView: View {
                         Text(mode.displayName).tag(mode)
                     }
                 }
+                .disabled(!formatter.isAvailable)
 
-                Text("No on-device formatting model is available yet, so this setting has no effect for now.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if formatter.isAvailable {
+                    Text("Uses \(formatter.displayName) on this Mac to punctuate and paragraph your dictation. It never changes your wording, and dictation still works if it fails.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(formatter.unavailableReason ?? "No on-device formatter is available on this Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Section("Privacy") {

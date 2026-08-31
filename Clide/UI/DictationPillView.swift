@@ -42,7 +42,12 @@ struct DictationPillView: View {
                     .transition(.opacity)
             }
             if state == .awaitingChoice, let choiceActions {
-                PillButton(title: "Remove fillers", action: choiceActions.removeFillers)
+                if let format = choiceActions.format {
+                    PillButton(title: "✨ Format", action: format)
+                }
+                if let removeFillers = choiceActions.removeFillers {
+                    PillButton(title: "Remove fillers", action: removeFillers)
+                }
                 PillButton(title: "Insert", action: choiceActions.insertAsIs, isProminent: true)
             }
         }

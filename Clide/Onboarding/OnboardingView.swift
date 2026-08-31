@@ -220,6 +220,13 @@ private struct ResultStep: View {
 private struct PreferencesStep: View {
     let next: () -> Void
     @ObservedObject private var formatting = FormattingPreferences.shared
+    private let formatter: TranscriptFormatter = AppleFormatter()
+
+    private var formatterDetail: String {
+        formatter.isAvailable
+            ? "Uses \(formatter.displayName) to punctuate and paragraph, without changing your words."
+            : formatter.unavailableReason ?? "No on-device formatter is available on this Mac."
+    }
 
     var body: some View {
         StepLayout(
@@ -236,9 +243,10 @@ private struct PreferencesStep: View {
 
                 PreferencePicker(
                     title: "AI formatting",
-                    detail: "Not available yet — no on-device formatting model has shipped.",
+                    detail: formatterDetail,
                     selection: $formatting.aiFormattingMode
                 )
+                .disabled(!formatter.isAvailable)
 
                 Button("Continue", action: next)
                     .keyboardShortcut(.defaultAction)

@@ -86,8 +86,10 @@ enum PillState: Equatable {
     }
 }
 
-/// Actions the pill offers while waiting on a cleanup decision.
+/// Actions the pill offers while waiting on a cleanup decision. The optional
+/// ones are only present when that step actually applies to this transcript.
 struct PillChoiceActions {
-    let removeFillers: () -> Void
+    let removeFillers: (() -> Void)?
+    let format: (() -> Void)?
     let insertAsIs: () -> Void
 }
