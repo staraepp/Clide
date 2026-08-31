@@ -10,6 +10,8 @@ struct SettingsView: View {
     @ObservedObject private var formatting = FormattingPreferences.shared
     @ObservedObject private var statistics = DictationStatistics.shared
     @ObservedObject private var history = TranscriptHistory.shared
+    @ObservedObject private var dictation = DictationPreferences.shared
+    @ObservedObject private var audioDevices = AudioDeviceManager.shared
     private let formatter: TranscriptFormatter = AppleFormatter()
     @ObservedObject private var launchAtLogin = LaunchAtLogin.shared
     @ObservedObject private var developer = DeveloperSettings.shared
@@ -26,9 +28,28 @@ struct SettingsView: View {
             Section("Dictation") {
                 KeyboardShortcuts.Recorder("Shortcut", name: .toggleDictation)
 
-                Text("Press it once to start, again to stop. Escape cancels.")
+                Picker("When you press it", selection: $dictation.activation) {
+                    ForEach(DictationActivation.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                Text("Escape cancels a recording in progress.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Picker("Microphone", selection: $audioDevices.selectedDeviceUID) {
+                    Text("System default").tag(String?.none)
+                    ForEach(audioDevices.devices) { device in
+                        Text(device.name).tag(String?.some(device.uid))
+                    }
+                }
+
+                if audioDevices.selectedDeviceIsMissing {
+                    Text("That microphone isn't connected right now, so Clide will use the system default.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
 
                 LabeledContent("Accessibility") {
                     HStack(spacing: 8) {

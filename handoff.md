@@ -63,7 +63,7 @@ Things a reader might assume work but don't:
 
 - **Developer-data sharing uploads nothing.** There's no Clide server. The consent toggle only unlocks Debug Mode; Settings states this outright. Don't add a fake upload.
 - **AI formatting needs macOS 26 + Apple Intelligence enabled.** On anything older the picker is disabled and says why. There is no Clide Mini fallback formatter yet.
-- **Microphone selection, push-to-talk, device-change/sleep-wake handling** (§8, §7) are not implemented.
+- **Sleep/wake recovery and mid-recording device disconnect** (§8) are not handled. Device *enumeration* reacts to changes, but a microphone unplugged mid-dictation isn't recovered from.
 - **Model download shows no percentage** — the pill and browser show an indeterminate spinner, because neither runtime's `prepare()` surfaces progress through the current `TranscriptionEngine` protocol.
 - **Existing-model discovery detects but doesn't yet reuse in place.** It reports what it finds; Clide still downloads its own copy into its own directory.
 - Accuracy/speed scores in `ModelCatalog` are hand-written approximations from published benchmarks, not measurements. Hardware-fit ratings, by contrast, are computed from this Mac's real sysctl values. Don't present the first two as if they were measured.
@@ -94,8 +94,10 @@ Permissions/
 Dictation/
   DictationCoordinator.swift  the sacred-path state machine — start here to understand the flow
   HotkeyName.swift           KeyboardShortcuts.Name.toggleDictation, default ⌥+.
+  DictationPreferences.swift  toggle vs push-to-talk
 Audio/
   AudioCaptureService.swift   AVAudioEngine → 16kHz mono Float32, lock-guarded buffer, amplitude callback
+  AudioDeviceManager.swift    CoreAudio input enumeration; selection stored by UID, not the boot-unstable ID
   WAVEncoder.swift            16-bit PCM WAV for cloud uploads; local engines take Floats directly
 Transcription/
   TranscriptionEngine.swift              protocol: transcribe(samples:) + optional prepare(); RecoveryAction

@@ -1,15 +1,19 @@
 import AVFoundation
+import CoreAudio
 
 enum AudioCaptureError: Error, LocalizedError {
     case engineStartFailed(Error)
     case converterUnavailable
+    case deviceUnavailable
 
     var errorDescription: String? {
         switch self {
-        case .engineStartFailed(let error):
-            return "Couldn't start the microphone: \(error.localizedDescription)"
+        case .engineStartFailed:
+            return "Couldn't start the microphone. Check it's connected and not in use."
         case .converterUnavailable:
             return "Couldn't prepare audio for transcription."
+        case .deviceUnavailable:
+            return "That microphone isn't available. Clide used the default instead."
         }
     }
 }
@@ -37,13 +41,22 @@ final class AudioCaptureService: @unchecked Sendable {
 
     /// - Parameter onAmplitude: called from the audio render thread with a
     ///   rough RMS level (roughly 0...0.3 for normal speech) for live waveform UI.
-    func startRecording(onAmplitude: (@Sendable (Float) -> Void)? = nil) throws {
+    func startRecording(
+        preferredDeviceID: AudioDeviceID? = nil,
+        onAmplitude: (@Sendable (Float) -> Void)? = nil
+    ) throws {
         lock.lock()
         capturedSamples.removeAll()
         lock.unlock()
         self.onAmplitude = onAmplitude
 
         let inputNode = engine.inputNode
+
+        // Must happen before the format is read or the engine starts, since
+        // changing the device changes the input format.
+        if let preferredDeviceID {
+            try? Self.setInputDevice(preferredDeviceID, on: inputNode)
+        }
         let inputFormat = inputNode.outputFormat(forBus: 0)
 
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
@@ -104,6 +117,25 @@ final class AudioCaptureService: @unchecked Sendable {
         lock.lock()
         capturedSamples.append(contentsOf: samples)
         lock.unlock()
+    }
+
+    /// Points the engine's input unit at a specific microphone. Best-effort:
+    /// if it fails, capture falls back to the system default rather than
+    /// refusing to record.
+    private static func setInputDevice(_ deviceID: AudioDeviceID, on inputNode: AVAudioInputNode) throws {
+        guard let audioUnit = inputNode.audioUnit else { return }
+        var mutableID = deviceID
+        let status = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &mutableID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+        guard status == noErr else {
+            throw AudioCaptureError.deviceUnavailable
+        }
     }
 
     private func reportAmplitude(from buffer: AVAudioPCMBuffer) {

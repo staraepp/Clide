@@ -10,6 +10,8 @@ final class DictationCoordinator {
     private let formattingPreferences: FormattingPreferences
     private let statistics: DictationStatistics
     private let history: TranscriptHistory
+    private let dictationPreferences: DictationPreferences
+    private let audioDevices: AudioDeviceManager
     private let pillWindow = DictationPillWindow()
 
     /// When set, finished transcripts go here instead of being inserted into
@@ -34,14 +36,31 @@ final class DictationCoordinator {
         modelManager: ModelManager = .shared,
         formattingPreferences: FormattingPreferences = .shared,
         statistics: DictationStatistics = .shared,
-        history: TranscriptHistory = .shared
+        history: TranscriptHistory = .shared,
+        dictationPreferences: DictationPreferences = .shared,
+        audioDevices: AudioDeviceManager = .shared
     ) {
         self.modelManager = modelManager
         self.formattingPreferences = formattingPreferences
         self.statistics = statistics
         self.history = history
+        self.dictationPreferences = dictationPreferences
+        self.audioDevices = audioDevices
+
+        // Push-to-talk records between key down and key up; toggle acts on the
+        // release so a held key doesn't immediately start and stop.
+        KeyboardShortcuts.onKeyDown(for: .toggleDictation) { [weak self] in
+            guard let self, self.dictationPreferences.activation == .pushToTalk else { return }
+            self.startListening()
+        }
         KeyboardShortcuts.onKeyUp(for: .toggleDictation) { [weak self] in
-            self?.toggleDictation()
+            guard let self else { return }
+            switch self.dictationPreferences.activation {
+            case .toggle:
+                self.toggleDictation()
+            case .pushToTalk:
+                if self.isListening { self.stopListeningAndProcess() }
+            }
         }
     }
 
@@ -52,6 +71,7 @@ final class DictationCoordinator {
     // MARK: - Start / stop
 
     private func startListening() {
+        guard !isListening else { return }
         hideTask?.cancel()
 
         guard PermissionsManager.microphoneStatus() == .granted else {
@@ -64,7 +84,9 @@ final class DictationCoordinator {
         // here fires the dialog on every fresh launch. The pill says what's
         // missing; Settings and onboarding are where it's granted.
         do {
-            try audioCapture.startRecording { [weak self] amplitude in
+            try audioCapture.startRecording(
+                preferredDeviceID: audioDevices.selectedDevice?.id
+            ) { [weak self] amplitude in
                 Task { @MainActor in self?.pillWindow.updateAmplitude(amplitude) }
             }
             isListening = true
