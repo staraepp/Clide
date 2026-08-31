@@ -6,6 +6,8 @@ import SwiftUI
 /// exist yet.
 struct SettingsView: View {
     @ObservedObject private var modelManager = ModelManager.shared
+    @ObservedObject private var formatting = FormattingPreferences.shared
+    @ObservedObject private var statistics = DictationStatistics.shared
     @State private var groqAPIKey = KeychainService.groqAPIKey() ?? ""
     @State private var connectionStatus: ConnectionStatus = .unknown
     @State private var isTestingConnection = false
@@ -57,9 +59,47 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Formatting") {
+                Picker("Filler word removal", selection: $formatting.fillerRemovalMode) {
+                    ForEach(FormattingMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                Text("Removes “um” and “uh”. Words like “so” and “well” are left alone — they're too often part of what you meant.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Picker("AI formatting", selection: $formatting.aiFormattingMode) {
+                    ForEach(FormattingMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                Text("No on-device formatting model is available yet, so this setting has no effect for now.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Privacy") {
+                Toggle("Keep local statistics", isOn: $statistics.isEnabled)
+
+                HStack {
+                    Text("\(statistics.lifetimeSummary.dictationCount) dictations recorded")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Clear Statistics") { statistics.clear() }
+                        .disabled(statistics.records.isEmpty)
+                }
+
+                Text("Statistics are counters only — they stay on this Mac and never include what you said.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
     }
 
