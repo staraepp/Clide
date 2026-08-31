@@ -33,20 +33,6 @@ struct HardwareFitBadge: View {
     }
 }
 
-private struct StarRow: View {
-    let filled: Int
-
-    var body: some View {
-        HStack(spacing: 1) {
-            ForEach(1...5, id: \.self) { index in
-                Image(systemName: index <= filled ? "star.fill" : "star")
-                    .font(.system(size: 9))
-                    .foregroundStyle(index <= filled ? Color.accentColor : Color.secondary.opacity(0.4))
-            }
-        }
-    }
-}
-
 private struct ExplanationView: View {
     let model: TranscriptionModelInfo
     let fit: HardwareFit

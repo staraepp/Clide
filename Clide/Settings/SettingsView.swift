@@ -11,23 +11,14 @@ struct SettingsView: View {
     @ObservedObject private var statistics = DictationStatistics.shared
     @ObservedObject private var launchAtLogin = LaunchAtLogin.shared
     @ObservedObject private var developer = DeveloperSettings.shared
-    @State private var groqAPIKey = KeychainService.groqAPIKey() ?? ""
     @State private var isShowingConsole = false
+    @State private var isShowingModelBrowser = false
     @State private var accessibilityStatus = PermissionsManager.accessibilityStatus()
 
     /// Accessibility is granted outside the app, so poll while Settings is
     /// open rather than showing a stale state. This only reads the status —
     /// it never triggers the system prompt.
     private let statusPoll = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    @State private var connectionStatus: ConnectionStatus = .unknown
-    @State private var isTestingConnection = false
-
-    private enum ConnectionStatus: Equatable {
-        case unknown
-        case success
-        case failure(String)
-    }
-
     var body: some View {
         Form {
             Section("Dictation") {
@@ -78,35 +69,22 @@ struct SettingsView: View {
                     )
                 ) {
                     ForEach(modelManager.catalog) { model in
-                        Text("\(model.displayName) — \(model.isLocal ? "Local" : "Cloud")")
+                        Text("\(model.displayName) — \(model.runtime.displayName)")
                             .tag(model.id)
                     }
                 }
+
+                Button("Browse Models…") { isShowingModelBrowser = true }
             }
 
-            Section("Groq (Cloud, bring your own key)") {
-                SecureField("API Key", text: $groqAPIKey)
-                    .textContentType(.password)
-
-                HStack {
-                    Button("Save") {
-                        KeychainService.setGroqAPIKey(groqAPIKey)
-                        connectionStatus = .unknown
-                    }
-                    .disabled(groqAPIKey.isEmpty)
-
-                    Button(isTestingConnection ? "Testing…" : "Test Connection") {
-                        Task { await testConnection() }
-                    }
-                    .disabled(groqAPIKey.isEmpty || isTestingConnection)
-
-                    Spacer()
-                    connectionStatusView
-                }
-
-                Text("Audio you dictate while a Groq model is active is sent directly to Groq using your key — never through a Clide server.")
+            Section("Cloud Providers") {
+                Text("Bring your own key. Audio goes straight from this Mac to the provider you pick — never through a Clide server.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                ForEach(CloudProvider.allCases) { provider in
+                    CloudProviderRow(provider: provider)
+                }
             }
 
             Section("Formatting") {
@@ -190,6 +168,9 @@ struct SettingsView: View {
         .onReceive(statusPoll) { _ in
             accessibilityStatus = PermissionsManager.accessibilityStatus()
         }
+        .sheet(isPresented: $isShowingModelBrowser) {
+            ModelBrowserSheet(isPresented: $isShowingModelBrowser)
+        }
         .sheet(isPresented: $isShowingConsole) {
             VStack(spacing: 0) {
                 DeveloperConsoleView()
@@ -203,29 +184,82 @@ struct SettingsView: View {
             }
         }
     }
+}
+
+/// One BYOK provider: key entry, save, and a real connection test.
+private struct CloudProviderRow: View {
+    let provider: CloudProvider
+
+    @State private var key: String = ""
+    @State private var status: TestStatus = .idle
+
+    private enum TestStatus: Equatable {
+        case idle
+        case testing
+        case success
+        case failure(String)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(provider.displayName)
+                    .font(.callout.weight(.medium))
+                Spacer()
+                statusView
+            }
+
+            HStack(spacing: 8) {
+                SecureField("API key", text: $key)
+                    .textContentType(.password)
+
+                Button("Save") {
+                    provider.setAPIKey(key)
+                    status = .idle
+                }
+                .disabled(key.isEmpty)
+
+                Button("Test") { Task { await test() } }
+                    .disabled(!provider.hasAPIKey || status == .testing)
+            }
+
+            if let url = provider.apiKeyURL {
+                Link("Get a \(provider.displayName) key", destination: url)
+                    .font(.caption)
+            }
+        }
+        .padding(.vertical, 4)
+        .onAppear { key = provider.apiKey ?? "" }
+    }
 
     @ViewBuilder
-    private var connectionStatusView: some View {
-        switch connectionStatus {
-        case .unknown:
-            EmptyView()
+    private var statusView: some View {
+        switch status {
+        case .idle:
+            if provider.hasAPIKey {
+                Text("Key saved").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Not set up").font(.caption).foregroundStyle(.tertiary)
+            }
+        case .testing:
+            ProgressView().controlSize(.small)
         case .success:
             Label("Connected", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.callout)
+                .foregroundStyle(.green).font(.caption)
         case .failure(let message):
             Label(message, systemImage: "xmark.circle.fill")
-                .foregroundStyle(.red)
-                .font(.callout)
+                .foregroundStyle(.red).font(.caption)
         }
     }
 
-    private func testConnection() async {
-        isTestingConnection = true
-        defer { isTestingConnection = false }
-
-        let succeeded = await GroqTranscriptionEngine.testConnection(apiKey: groqAPIKey)
-        connectionStatus = succeeded ? .success : .failure("Couldn't connect — check your key.")
+    private func test() async {
+        status = .testing
+        switch await provider.testConnection() {
+        case .success:
+            status = .success
+        case .failure(let error):
+            status = .failure(error.errorDescription ?? "Couldn't connect")
+        }
     }
 }
 

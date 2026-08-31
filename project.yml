@@ -37,6 +37,7 @@ targets:
         LSUIElement: true
         LSMinimumSystemVersion: "14.0"
         NSMicrophoneUsageDescription: "Clide needs microphone access to turn your speech into text right where you're typing."
+        NSSpeechRecognitionUsageDescription: "Clide uses your Mac's built-in speech recognition when you choose the Apple Speech model. Recognition is kept on-device."
         NSHumanReadableCopyright: "Copyright © 2026 Clide contributors. MIT Licensed."
     settings:
       base:

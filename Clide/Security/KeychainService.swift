@@ -45,16 +45,5 @@ enum KeychainService {
     }
 }
 
-extension KeychainService {
-    private static let groqAccount = "groq-api-key"
-
-    static func groqAPIKey() -> String? { value(forAccount: groqAccount) }
-
-    static func setGroqAPIKey(_ key: String?) {
-        guard let key, !key.isEmpty else {
-            removeValue(forAccount: groqAccount)
-            return
-        }
-        setValue(key, forAccount: groqAccount)
-    }
-}
+// Per-provider key access lives on `CloudProvider`, which owns the account
+// naming — this stays a generic Keychain wrapper.

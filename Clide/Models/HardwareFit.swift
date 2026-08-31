@@ -3,7 +3,7 @@ import Foundation
 /// How well a model suits this particular Mac, with the reasoning kept
 /// alongside the score so the UI can explain the rating rather than just
 /// showing decorative stars (clide.md §13).
-struct HardwareFit: Sendable {
+struct HardwareFit: Sendable, Equatable {
     /// 1–5.
     let stars: Int
     let summary: String
@@ -11,17 +11,26 @@ struct HardwareFit: Sendable {
     let cautions: [String]
 
     static func evaluate(model: TranscriptionModelInfo, on hardware: HardwareProfile = .current) -> HardwareFit {
-        guard model.isLocal else { return cloudFit(for: model) }
+        switch model.runtime {
+        case .cloud(let provider):
+            return cloudFit(provider: provider, model: model)
+        case .appleSpeech:
+            return appleSpeechFit(hardware: hardware)
+        case .whisperKit, .fluidAudio:
+            return localFit(model: model, hardware: hardware)
+        }
+    }
 
+    private static func localFit(model: TranscriptionModelInfo, hardware: HardwareProfile) -> HardwareFit {
         var positives: [String] = []
         var cautions: [String] = []
         var score = 3
 
-        if model.usesNeuralEngine, hardware.hasNeuralEngine {
+        if hardware.hasNeuralEngine {
             positives.append("Runs on the Apple Neural Engine")
             score += 1
-        } else if model.usesNeuralEngine {
-            cautions.append("This Mac has no Neural Engine, so the model runs on the CPU")
+        } else {
+            cautions.append("No Neural Engine on this Mac, so it runs on the CPU")
             score -= 1
         }
 
@@ -29,11 +38,11 @@ struct HardwareFit: Sendable {
             positives.append("Native Apple Silicon runtime")
         }
 
-        let memoryHeadroom = hardware.memoryGigabytes - model.recommendedMemoryGB
-        if memoryHeadroom >= 4 {
-            positives.append("Comfortable memory headroom (\(model.formattedMemoryRequirement) recommended)")
+        let headroom = hardware.memoryGigabytes - model.recommendedMemoryGB
+        if headroom >= 4 {
+            positives.append("Comfortable memory requirement (\(model.formattedMemoryRequirement))")
             score += 1
-        } else if memoryHeadroom >= 0 {
+        } else if headroom >= 0 {
             positives.append("Meets the \(model.formattedMemoryRequirement) memory recommendation")
         } else {
             cautions.append("Wants \(model.formattedMemoryRequirement); this Mac has \(hardware.formattedMemory)")
@@ -43,32 +52,58 @@ struct HardwareFit: Sendable {
         if model.speedScore >= 4, hardware.isAppleSilicon {
             positives.append("Expected to transcribe faster than real time")
         } else if model.speedScore <= 2 {
-            cautions.append("Slower than the other local options")
+            cautions.append("Slower than the other local options here")
+            score -= 1
         }
 
-        let stars = min(max(score, 1), 5)
+        if model.downloadSizeMB >= 1000 {
+            cautions.append("Large download (\(model.formattedDownloadSize))")
+        }
+
         return HardwareFit(
-            stars: stars,
-            summary: summaryText(for: stars),
+            stars: clamp(score),
+            summary: summaryText(for: clamp(score)),
             positives: positives,
             cautions: cautions
         )
     }
 
-    private static func cloudFit(for model: TranscriptionModelInfo) -> HardwareFit {
+    private static func appleSpeechFit(hardware: HardwareProfile) -> HardwareFit {
         HardwareFit(
-            stars: 3,
-            summary: "Doesn't depend on this Mac",
+            stars: 4,
+            summary: "Built into macOS",
             positives: [
-                "Runs on \(model.runtime.displayName)'s hardware, not yours",
-                "No model download and no local memory used",
+                "Nothing to download — macOS manages the model",
+                "Uses no additional disk space",
             ],
             cautions: [
-                "Your audio is sent to \(model.runtime.displayName)",
-                "Needs an internet connection and your own API key",
+                "Offline support depends on the language models your Mac has installed",
+                "Accuracy generally trails the dedicated local models",
             ]
         )
     }
+
+    private static func cloudFit(provider: CloudProvider, model: TranscriptionModelInfo) -> HardwareFit {
+        var cautions = [
+            "Your audio is sent to \(provider.displayName)",
+            "Needs an internet connection and your own API key",
+        ]
+        if model.speedScore <= 2 {
+            cautions.append("Uploads and queues each recording, so expect a wait")
+        }
+
+        return HardwareFit(
+            stars: 3,
+            summary: "Doesn't depend on this Mac",
+            positives: [
+                "Runs on \(provider.displayName)'s hardware, not yours",
+                "No download and no local memory used",
+            ],
+            cautions: cautions
+        )
+    }
+
+    private static func clamp(_ score: Int) -> Int { min(max(score, 1), 5) }
 
     private static func summaryText(for stars: Int) -> String {
         switch stars {
@@ -89,9 +124,25 @@ extension TranscriptionModelInfo {
     }
 
     var formattedDownloadSize: String {
-        downloadSizeMB >= 1000
-            ? String(format: "%.1f GB", Double(downloadSizeMB) / 1000)
-            : "\(downloadSizeMB) MB"
+        switch source {
+        case .systemManaged: return "Built in"
+        case .remote: return "No download"
+        case .download:
+            return downloadSizeMB >= 1000
+                ? String(format: "%.1f GB", Double(downloadSizeMB) / 1000)
+                : "\(downloadSizeMB) MB"
+        }
+    }
+
+    /// Short capability chips for the model browser.
+    var capabilityTags: [String] {
+        var tags: [String] = []
+        if capabilities.streaming { tags.append("Streaming") }
+        if capabilities.wordTimestamps { tags.append("Word timings") }
+        if capabilities.diarization { tags.append("Speakers") }
+        if capabilities.translation { tags.append("Translation") }
+        if isMultilingual { tags.append("Multilingual") }
+        return tags
     }
 }
 

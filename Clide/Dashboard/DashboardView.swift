@@ -6,6 +6,7 @@ struct DashboardView: View {
     @ObservedObject private var modelManager = ModelManager.shared
     @ObservedObject private var statistics = DictationStatistics.shared
     @StateObject private var shortcutMonitor = ShortcutPressMonitor()
+    @State private var isShowingBrowser = false
 
     var body: some View {
         ScrollView {
@@ -15,7 +16,7 @@ struct DashboardView: View {
 
                 ReadinessCard(model: modelManager.activeModel, monitor: shortcutMonitor)
                 TodaySection(summary: statistics.todaySummary, isEnabled: statistics.isEnabled)
-                ModelsSection(modelManager: modelManager)
+                ModelsSection(modelManager: modelManager, isShowingBrowser: $isShowingBrowser)
             }
             .padding(24)
         }
@@ -23,6 +24,9 @@ struct DashboardView: View {
         .background(.background)
         .onAppear { shortcutMonitor.start() }
         .onDisappear { shortcutMonitor.stop() }
+        .sheet(isPresented: $isShowingBrowser) {
+            ModelBrowserSheet(isPresented: $isShowingBrowser)
+        }
     }
 
     private static var greeting: String {
@@ -155,16 +159,34 @@ private struct SupportingStats: View {
 private struct ModelsSection: View {
     @ObservedObject var modelManager: ModelManager
 
+    @Binding var isShowingBrowser: Bool
+
+    /// Only what's relevant here: the active model, anything already
+    /// downloaded, and cloud providers that have a key. Everything else lives
+    /// in the browser rather than making this a wall of eleven rows.
+    private var relevantModels: [TranscriptionModelInfo] {
+        modelManager.catalog.filter { model in
+            model.id == modelManager.activeModelID || modelManager.isReadyToUse(model)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader("Your models")
+            HStack {
+                SectionHeader("Your models")
+                Spacer()
+                Button("Browse all") { isShowingBrowser = true }
+                    .buttonStyle(.link)
+                    .font(.caption)
+            }
 
             VStack(spacing: 0) {
-                ForEach(Array(modelManager.catalog.enumerated()), id: \.element.id) { index, model in
+                ForEach(Array(relevantModels.enumerated()), id: \.element.id) { index, model in
                     if index > 0 { Divider().padding(.leading, 14) }
                     ModelRow(
                         model: model,
                         isActive: model.id == modelManager.activeModelID,
+                        isInstalled: modelManager.isInstalled(model),
                         activate: { modelManager.setActiveModel(model.id) }
                     )
                 }
@@ -177,6 +199,7 @@ private struct ModelsSection: View {
 private struct ModelRow: View {
     let model: TranscriptionModelInfo
     let isActive: Bool
+    let isInstalled: Bool
     let activate: () -> Void
 
     @State private var isHovering = false
@@ -194,7 +217,7 @@ private struct ModelRow: View {
                         .foregroundStyle(.primary)
                     HStack(spacing: 5) {
                         Text(model.isLocal ? "On this Mac" : "Cloud · \(model.runtime.displayName)")
-                        if model.isLocal {
+                        if model.isLocal, isInstalled {
                             Text("·")
                             Text(model.formattedDownloadSize)
                         }

@@ -26,7 +26,7 @@ enum DiagnosticsReport {
             "Neural Engine:      \(hardware.hasNeuralEngine ? "yes" : "no")",
             "",
             "Active model ID:    \(model.id)",
-            "Runtime:            \(model.runtime.rawValue)",
+            "Runtime:            \(model.runtime.displayName)",
             "Model location:     \(model.isLocal ? "local" : "cloud")",
             "",
             "Microphone:         \(describe(PermissionsManager.microphoneStatus()))",

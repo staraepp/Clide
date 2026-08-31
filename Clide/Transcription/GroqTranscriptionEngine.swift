@@ -4,7 +4,7 @@ import Foundation
 /// Audio goes straight from this device to Groq using the user's own API key —
 /// no Clide-owned proxy, per clide.md §10.
 struct GroqTranscriptionEngine: TranscriptionEngine {
-    private static let transcriptionURL = URL(string: "https://api.groq.com/openai/v1/audio/transcriptions")!
+    private static let endpoint = URL(string: "https://api.groq.com/openai/v1/audio/transcriptions")!
 
     let modelName: String
 
@@ -13,35 +13,26 @@ struct GroqTranscriptionEngine: TranscriptionEngine {
     }
 
     func transcribe(samples: [Float]) async throws -> String {
-        guard let apiKey = KeychainService.groqAPIKey(), !apiKey.isEmpty else {
-            throw TranscriptionError.modelUnavailable("Add a Groq API key in Settings to use this model.")
+        guard let key = CloudProvider.groq.apiKey, !key.isEmpty else {
+            throw CloudProviderError.missingKey(.groq)
         }
 
         let boundary = "Clide-\(UUID().uuidString)"
-        var request = URLRequest(url: Self.transcriptionURL)
+        var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let header = CloudProvider.groq.authorizationHeader(for: key)
+        request.setValue(header.value, forHTTPHeaderField: header.field)
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = Self.multipartBody(
             boundary: boundary,
             model: modelName,
             wavData: WAVEncoder.encode(samples: samples)
         )
+        request.timeoutInterval = 60
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch {
-            throw TranscriptionError.modelUnavailable("Couldn't reach Groq: \(error.localizedDescription)")
-        }
+        let data = try await CloudRequest.perform(request, provider: .groq)
+        let decoded = try CloudRequest.decode(GroqTranscriptionResponse.self, from: data, provider: .groq)
 
-        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
-            let message = String(data: data, encoding: .utf8) ?? "unknown error"
-            throw TranscriptionError.modelUnavailable("Groq couldn't transcribe that: \(message)")
-        }
-
-        let decoded = try JSONDecoder().decode(GroqTranscriptionResponse.self, from: data)
         let text = decoded.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw TranscriptionError.emptyResult }
         return text
@@ -71,19 +62,4 @@ struct GroqTranscriptionEngine: TranscriptionEngine {
 
 private struct GroqTranscriptionResponse: Decodable {
     let text: String
-}
-
-extension GroqTranscriptionEngine {
-    /// Lightweight key validation for Settings' "Test Connection" — hits the
-    /// (free) models-list endpoint rather than spending transcription quota.
-    static func testConnection(apiKey: String) async -> Bool {
-        guard !apiKey.isEmpty else { return false }
-        var request = URLRequest(url: URL(string: "https://api.groq.com/openai/v1/models")!)
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-
-        guard let (_, response) = try? await URLSession.shared.data(for: request),
-              let httpResponse = response as? HTTPURLResponse
-        else { return false }
-        return (200..<300).contains(httpResponse.statusCode)
-    }
 }
