@@ -66,12 +66,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
+    /// Deliberately does not prompt for Accessibility. macOS re-shows that
+    /// dialog every time it's requested while untrusted, so prompting at
+    /// launch nags on every start — and a rebuilt development build is
+    /// untrusted even when System Settings still lists Clide as enabled.
+    /// Accessibility is asked for in onboarding, and Clide degrades to
+    /// clipboard-only without it.
     private func requestPermissionsIfNeeded() {
         if PermissionsManager.microphoneStatus() == .notDetermined {
             Task { await PermissionsManager.requestMicrophoneAccess() }
-        }
-        if PermissionsManager.accessibilityStatus() != .granted {
-            PermissionsManager.requestAccessibilityAccess()
         }
     }
 }

@@ -92,12 +92,11 @@ final class OnboardingState: ObservableObject {
     }
 
     func requestAccessibility() {
-        PermissionsManager.requestAccessibilityAccess()
+        PermissionsManager.promptForAccessibilityAccess()
     }
 
     func openAccessibilitySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
-        NSWorkspace.shared.open(url)
+        PermissionsManager.openAccessibilitySettings()
     }
 
     private func startPollingPermissions() {

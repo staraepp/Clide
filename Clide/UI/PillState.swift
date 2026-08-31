@@ -11,6 +11,7 @@ enum PillState: Equatable {
     case awaitingChoice
     case inserted
     case copiedToClipboard
+    case copiedNeedsAccessibility
     case secureFieldBlocked
     case error(String)
 
@@ -22,6 +23,7 @@ enum PillState: Equatable {
         case .awaitingChoice: return "Ready"
         case .inserted: return "Inserted"
         case .copiedToClipboard: return "Copied to clipboard"
+        case .copiedNeedsAccessibility: return "Copied — allow Accessibility to type it for you"
         case .secureFieldBlocked: return "This looks like a secure field"
         case .error(let message): return message
         }
@@ -35,6 +37,7 @@ enum PillState: Equatable {
         case .awaitingChoice: return "text.badge.checkmark"
         case .inserted: return "checkmark"
         case .copiedToClipboard: return "doc.on.clipboard"
+        case .copiedNeedsAccessibility: return "doc.on.clipboard"
         case .secureFieldBlocked: return "lock"
         case .error: return "exclamationmark.triangle"
         }

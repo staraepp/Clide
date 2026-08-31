@@ -25,6 +25,7 @@ final class DictationCoordinator {
     private var hideTask: Task<Void, Never>?
     private var choiceTimeoutTask: Task<Void, Never>?
     private var escapeMonitor: Any?
+    private var hasPromptedForAccessibility = false
 
     /// How long the pill waits for a cleanup decision before inserting as-is.
     private static let choiceTimeout: TimeInterval = 8
@@ -55,12 +56,14 @@ final class DictationCoordinator {
             Task { await requestMicrophoneThenRetry() }
             return
         }
-        // Only insertion needs Accessibility, so a practice dictation that just
-        // shows its result doesn't have to wait for that permission.
-        if transcriptHandler == nil, PermissionsManager.accessibilityStatus() != .granted {
-            PermissionsManager.requestAccessibilityAccess()
-            present(.error("Grant Accessibility access in System Settings, then try again"), autoHideAfter: 4)
-            return
+        // Accessibility is not required to dictate — without it Clide still
+        // transcribes and leaves the text on the clipboard. Prompt at most
+        // once per launch, since macOS re-shows the dialog on every request.
+        if transcriptHandler == nil,
+           PermissionsManager.accessibilityStatus() != .granted,
+           !hasPromptedForAccessibility {
+            hasPromptedForAccessibility = true
+            PermissionsManager.promptForAccessibilityAccess()
         }
 
         do {
@@ -187,6 +190,9 @@ final class DictationCoordinator {
         case .copiedToClipboard:
             clideLog(.warning, "insertion", "Direct insertion unavailable; used clipboard fallback")
             present(.copiedToClipboard, autoHideAfter: 2)
+        case .copiedNeedsAccessibility:
+            clideLog(.warning, "insertion", "Accessibility not granted; copied to clipboard only")
+            present(.copiedNeedsAccessibility, autoHideAfter: 4)
         case .secureFieldBlocked:
             clideLog(.info, "insertion", "Secure field detected; nothing inserted")
             present(.secureFieldBlocked, autoHideAfter: 2.5)

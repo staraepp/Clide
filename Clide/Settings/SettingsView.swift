@@ -13,6 +13,12 @@ struct SettingsView: View {
     @ObservedObject private var developer = DeveloperSettings.shared
     @State private var groqAPIKey = KeychainService.groqAPIKey() ?? ""
     @State private var isShowingConsole = false
+    @State private var accessibilityStatus = PermissionsManager.accessibilityStatus()
+
+    /// Accessibility is granted outside the app, so poll while Settings is
+    /// open rather than showing a stale state. This only reads the status —
+    /// it never triggers the system prompt.
+    private let statusPoll = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var connectionStatus: ConnectionStatus = .unknown
     @State private var isTestingConnection = false
 
@@ -30,6 +36,27 @@ struct SettingsView: View {
                 Text("Press it once to start, again to stop. Escape cancels.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                LabeledContent("Accessibility") {
+                    HStack(spacing: 8) {
+                        if accessibilityStatus == .granted {
+                            Label("Granted", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.callout)
+                        } else {
+                            Label("Not granted", systemImage: "exclamationmark.circle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.callout)
+                        }
+                        Button("Open Settings") { PermissionsManager.openAccessibilitySettings() }
+                    }
+                }
+
+                if accessibilityStatus != .granted {
+                    Text("Without it Clide still transcribes and copies the text to your clipboard — it just can't type it for you.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("General") {
@@ -160,6 +187,9 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+        .onReceive(statusPoll) { _ in
+            accessibilityStatus = PermissionsManager.accessibilityStatus()
+        }
         .sheet(isPresented: $isShowingConsole) {
             VStack(spacing: 0) {
                 DeveloperConsoleView()

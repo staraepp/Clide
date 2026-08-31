@@ -4,6 +4,9 @@ import ApplicationServices
 enum InsertionOutcome: Equatable {
     case insertedDirectly
     case copiedToClipboard
+    /// Transcript is on the clipboard, but Clide couldn't paste it because
+    /// Accessibility access hasn't been granted.
+    case copiedNeedsAccessibility
     case secureFieldBlocked
     case failed(String)
 }
@@ -15,6 +18,14 @@ enum InsertionOutcome: Equatable {
 enum TextInsertionService {
     static func insert(_ text: String) -> InsertionOutcome {
         guard !text.isEmpty else { return .failed("Nothing to insert") }
+
+        // Both the Accessibility path and the synthetic ⌘V of the clipboard
+        // fallback need this permission, so without it the useful thing Clide
+        // can still do is leave the transcript on the clipboard to paste by hand.
+        guard AXIsProcessTrusted() else {
+            copyToClipboard(text)
+            return .copiedNeedsAccessibility
+        }
 
         guard let focusedElement = focusedUIElement() else {
             return pasteViaClipboard(text)
@@ -65,6 +76,12 @@ enum TextInsertionService {
     }
 
     // MARK: - Clipboard fallback
+
+    private static func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
 
     private static func pasteViaClipboard(_ text: String) -> InsertionOutcome {
         let pasteboard = NSPasteboard.general
