@@ -20,6 +20,10 @@ final class ModelManager: ObservableObject {
     /// Models currently downloading, so the browser can show progress.
     @Published private(set) var preparingModelIDs: Set<String> = []
 
+    /// Cached so views can ask "is this usable?" while rendering without
+    /// hitting the Keychain once per row per redraw.
+    @Published private(set) var providersWithKeys: Set<CloudProvider> = []
+
     let catalog: [TranscriptionModelInfo] = ModelCatalog.all
     private var engineCache: [String: TranscriptionEngine] = [:]
 
@@ -27,6 +31,7 @@ final class ModelManager: ObservableObject {
         let stored = UserDefaults.standard.string(forKey: Self.activeModelKey)
         activeModelID = ModelCatalog.all.first(where: { $0.id == stored })?.id ?? ModelCatalog.defaultModelID
         refreshInstalledModels()
+        refreshProviderKeys()
     }
 
     var activeModel: TranscriptionModelInfo {
@@ -81,8 +86,13 @@ final class ModelManager: ObservableObject {
     /// Whether the model can actually be used right now — a cloud model needs
     /// its key, a downloadable one needs to be on disk.
     func isReadyToUse(_ model: TranscriptionModelInfo) -> Bool {
-        if let provider = model.runtime.cloudProvider { return provider.hasAPIKey }
+        if let provider = model.runtime.cloudProvider { return providersWithKeys.contains(provider) }
         return isInstalled(model)
+    }
+
+    /// Call after a key is saved or cleared.
+    func refreshProviderKeys() {
+        providersWithKeys = Set(CloudProvider.allCases.filter(\.hasAPIKey))
     }
 
     /// Scans Clide's models directory for each downloadable model's files,

@@ -263,6 +263,7 @@ private struct CloudProviderRow: View {
 
                 Button("Save") {
                     provider.setAPIKey(key)
+                    ModelManager.shared.refreshProviderKeys()
                     status = .idle
                 }
                 .disabled(key.isEmpty)

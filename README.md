@@ -8,15 +8,23 @@ See [clide.md](clide.md) for the full product specification and roadmap.
 
 ## Status
 
-**0.1 — Sacred Path Prototype.** The core loop works end to end:
+**In development.** The core loop works end to end:
 
-⌥+. → speak → local transcription (WhisperKit) → text inserted at the cursor, with clipboard-paste fallback.
+⌥+. → speak → local transcription → cleanup → text inserted at the cursor, with clipboard fallback.
 
-Nothing beyond that (model manager, dashboard, onboarding, cloud providers, formatting) is built yet — see [handoff.md](handoff.md) for exactly what exists and what's next.
+Also built: eleven models across WhisperKit, Parakeet, Apple Speech and three
+BYOK cloud providers; a model browser with hardware-fit ratings; onboarding;
+a dashboard; opt-in transcript history; and on-device AI formatting via Apple
+Intelligence where available.
+
+See [handoff.md](handoff.md) for exactly what exists, what still needs testing
+on real hardware, and what's deliberately not built yet.
 
 ## Building
 
-Requires Xcode 16+, macOS 14+, and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+Requires Xcode 16+, macOS 14+ on **Apple Silicon**, and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+
+Clide is Apple Silicon only: the Parakeet runtime uses `Float16`, which doesn't exist on Intel macOS.
 
 ```sh
 xcodegen generate
@@ -28,6 +36,13 @@ Or from the command line:
 ```sh
 xcodegen generate
 xcodebuild -project Clide.xcodeproj -scheme Clide -configuration Debug build
+```
+
+For a Release build, use the script — it passes architecture flags that the
+Swift Package dependencies need:
+
+```sh
+./scripts/build-release.sh
 ```
 
 `Clide.xcodeproj` is generated from [project.yml](project.yml) and isn't checked into git — regenerate it after pulling.
