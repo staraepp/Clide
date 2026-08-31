@@ -9,6 +9,7 @@ final class DictationCoordinator {
     private let modelManager: ModelManager
     private let formattingPreferences: FormattingPreferences
     private let statistics: DictationStatistics
+    private let history: TranscriptHistory
     private let pillWindow = DictationPillWindow()
 
     /// When set, finished transcripts go here instead of being inserted into
@@ -32,11 +33,13 @@ final class DictationCoordinator {
     init(
         modelManager: ModelManager = .shared,
         formattingPreferences: FormattingPreferences = .shared,
-        statistics: DictationStatistics = .shared
+        statistics: DictationStatistics = .shared,
+        history: TranscriptHistory = .shared
     ) {
         self.modelManager = modelManager
         self.formattingPreferences = formattingPreferences
         self.statistics = statistics
+        self.history = history
         KeyboardShortcuts.onKeyUp(for: .toggleDictation) { [weak self] in
             self?.toggleDictation()
         }
@@ -146,6 +149,12 @@ final class DictationCoordinator {
             let output = pipeline.process(rawTranscript)
 
             statistics.record(transcript: output.text, speakingDuration: speakingDuration, model: model)
+            history.record(
+                text: output.text,
+                model: model,
+                speakingDuration: speakingDuration,
+                sourceApplication: Self.frontmostApplicationName()
+            )
 
             if let transcriptHandler {
                 transcriptHandler(output.text, speakingDuration)
@@ -212,6 +221,11 @@ final class DictationCoordinator {
             clideLog(.error, "insertion", "Failed: \(message)")
             present(.error(message), autoHideAfter: 3)
         }
+    }
+
+    /// Best-effort, and only a name — never window titles or field contents.
+    private static func frontmostApplicationName() -> String? {
+        NSWorkspace.shared.frontmostApplication?.localizedName
     }
 
     // MARK: - Escape to cancel

@@ -5,6 +5,7 @@ import SwiftUI
 struct DashboardView: View {
     @ObservedObject private var modelManager = ModelManager.shared
     @ObservedObject private var statistics = DictationStatistics.shared
+    @ObservedObject private var history = TranscriptHistory.shared
     @StateObject private var shortcutMonitor = ShortcutPressMonitor()
     @State private var isShowingBrowser = false
 
@@ -16,6 +17,13 @@ struct DashboardView: View {
 
                 ReadinessCard(model: modelManager.activeModel, monitor: shortcutMonitor)
                 TodaySection(summary: statistics.todaySummary, isEnabled: statistics.isEnabled)
+
+                // History is off by default, so this section simply isn't
+                // there rather than sitting empty (clide.md §25).
+                if history.isEnabled, !history.entries.isEmpty {
+                    RecentActivitySection(entries: Array(history.entries.prefix(4)))
+                }
+
                 ModelsSection(modelManager: modelManager, isShowingBrowser: $isShowingBrowser)
             }
             .padding(24)
@@ -90,6 +98,7 @@ private struct TodaySection: View {
                     }
                     SupportingStats(summary: summary)
                 }
+                .animation(.snappy(duration: 0.3), value: summary.wordCount)
                 .padding(18)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -146,6 +155,7 @@ private struct SupportingStats: View {
         Text(text)
             .font(.caption)
             .monospacedDigit()
+            .contentTransition(.numericText())
             .foregroundStyle(.secondary)
     }
 
@@ -246,6 +256,77 @@ private struct ModelRow: View {
         .onHover { isHovering = $0 }
         .accessibilityLabel("\(model.displayName)\(isActive ? ", active" : "")")
         .accessibilityHint(isActive ? "" : "Activate this model")
+    }
+}
+
+// MARK: - Recent activity
+
+private struct RecentActivitySection: View {
+    let entries: [TranscriptEntry]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader("Recent")
+
+            VStack(spacing: 0) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 { Divider().padding(.leading, 14) }
+                    RecentActivityRow(entry: entry)
+                }
+            }
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+}
+
+private struct RecentActivityRow: View {
+    let entry: TranscriptEntry
+
+    @State private var isHovering = false
+    @State private var didCopy = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.text)
+                    .font(.system(size: 12))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 5) {
+                    Text(entry.date, format: .dateTime.hour().minute())
+                    if let app = entry.sourceApplication {
+                        Text("·")
+                        Text(app)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(entry.text, forType: .string)
+                didCopy = true
+            } label: {
+                Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 11))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(didCopy ? .green : .secondary)
+            .opacity(isHovering || didCopy ? 1 : 0)
+            .help("Copy transcript")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+            if !hovering { didCopy = false }
+        }
     }
 }
 

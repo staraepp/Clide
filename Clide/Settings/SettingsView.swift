@@ -9,6 +9,7 @@ struct SettingsView: View {
     @ObservedObject private var modelManager = ModelManager.shared
     @ObservedObject private var formatting = FormattingPreferences.shared
     @ObservedObject private var statistics = DictationStatistics.shared
+    @ObservedObject private var history = TranscriptHistory.shared
     @ObservedObject private var launchAtLogin = LaunchAtLogin.shared
     @ObservedObject private var developer = DeveloperSettings.shared
     @State private var isShowingConsole = false
@@ -110,6 +111,24 @@ struct SettingsView: View {
             }
 
             Section("Privacy") {
+                Toggle("Save transcript history", isOn: $history.isEnabled)
+
+                if history.isEnabled {
+                    HStack {
+                        Text("\(history.entries.count) transcript\(history.entries.count == 1 ? "" : "s") saved")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Clear History") { history.clear() }
+                            .disabled(history.entries.isEmpty)
+                    }
+                }
+
+                Text("Off by default. This is the only place Clide keeps what you actually said — turning it off deletes what's stored.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+
                 Toggle("Keep local statistics", isOn: $statistics.isEnabled)
 
                 HStack {
