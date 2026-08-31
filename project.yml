@@ -55,3 +55,30 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
         ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: NO
         ENABLE_APP_SANDBOX: NO
+
+  ClideTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ClideTests
+    dependencies:
+      - target: Clide
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.staraepp.ClideTests
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: NO
+
+schemes:
+  Clide:
+    build:
+      targets:
+        Clide: all
+        ClideTests: [test]
+    test:
+      targets:
+        - ClideTests
