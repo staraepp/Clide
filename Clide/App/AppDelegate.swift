@@ -16,15 +16,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Clide")
 
         let menu = NSMenu()
-        let titleItem = NSMenuItem(title: "Clide 0.1 — Sacred Path Prototype", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "Clide 0.2", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Clide", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
 
         item.menu = menu
         statusItem = item
+    }
+
+    @objc private func openSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     @objc private func quit() {

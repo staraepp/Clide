@@ -6,18 +6,18 @@ import KeyboardShortcuts
 @MainActor
 final class DictationCoordinator {
     private let audioCapture = AudioCaptureService()
-    private let transcriptionEngine: TranscriptionEngine
+    private let modelManager: ModelManager
     private let pillWindow = DictationPillWindow()
 
     private var state: PillState = .idle {
-        didSet { pillWindow.update(state: state) }
+        didSet { pillWindow.present(state: state) }
     }
     private var isListening = false
     private var hideTask: Task<Void, Never>?
     private var escapeMonitor: Any?
 
-    init(transcriptionEngine: TranscriptionEngine = WhisperKitTranscriptionEngine()) {
-        self.transcriptionEngine = transcriptionEngine
+    init(modelManager: ModelManager = .shared) {
+        self.modelManager = modelManager
         KeyboardShortcuts.onKeyUp(for: .toggleDictation) { [weak self] in
             self?.toggleDictation()
         }
@@ -43,7 +43,9 @@ final class DictationCoordinator {
         }
 
         do {
-            try audioCapture.startRecording()
+            try audioCapture.startRecording { [weak self] amplitude in
+                Task { @MainActor in self?.pillWindow.updateAmplitude(amplitude) }
+            }
             isListening = true
             state = .listening
             startEscapeMonitor()
@@ -86,7 +88,8 @@ final class DictationCoordinator {
 
     private func transcribeAndInsert(samples: [Float]) async {
         do {
-            let text = try await transcriptionEngine.transcribe(samples: samples)
+            let engine = modelManager.currentEngine()
+            let text = try await engine.transcribe(samples: samples)
             handle(TextInsertionService.insert(text))
         } catch {
             present(.error(error.localizedDescription), autoHideAfter: 3)

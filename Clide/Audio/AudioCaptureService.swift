@@ -27,6 +27,7 @@ final class AudioCaptureService: @unchecked Sendable {
     private let lock = NSLock()
     private var capturedSamples: [Float] = []
     private var converter: AVAudioConverter?
+    private var onAmplitude: (@Sendable (Float) -> Void)?
     private let targetFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: AudioCaptureService.whisperSampleRate,
@@ -34,10 +35,13 @@ final class AudioCaptureService: @unchecked Sendable {
         interleaved: false
     )!
 
-    func startRecording() throws {
+    /// - Parameter onAmplitude: called from the audio render thread with a
+    ///   rough RMS level (roughly 0...0.3 for normal speech) for live waveform UI.
+    func startRecording(onAmplitude: (@Sendable (Float) -> Void)? = nil) throws {
         lock.lock()
         capturedSamples.removeAll()
         lock.unlock()
+        self.onAmplitude = onAmplitude
 
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
@@ -72,6 +76,7 @@ final class AudioCaptureService: @unchecked Sendable {
     }
 
     private func consume(buffer: AVAudioPCMBuffer) {
+        reportAmplitude(from: buffer)
         guard let converter else { return }
 
         let ratio = targetFormat.sampleRate / buffer.format.sampleRate
@@ -99,5 +104,18 @@ final class AudioCaptureService: @unchecked Sendable {
         lock.lock()
         capturedSamples.append(contentsOf: samples)
         lock.unlock()
+    }
+
+    private func reportAmplitude(from buffer: AVAudioPCMBuffer) {
+        guard let onAmplitude, let channelData = buffer.floatChannelData else { return }
+        let frameLength = Int(buffer.frameLength)
+        guard frameLength > 0 else { return }
+
+        let samples = channelData[0]
+        var sumOfSquares: Float = 0
+        for index in 0..<frameLength {
+            sumOfSquares += samples[index] * samples[index]
+        }
+        onAmplitude(sqrt(sumOfSquares / Float(frameLength)))
     }
 }

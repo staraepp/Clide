@@ -12,6 +12,15 @@ This is deliberately the *only* thing built. Per `clide.md` §42 ("Clide 0.1 —
 
 **Not yet verified by a human**: I built and launched the app (it runs stably, status item registers, no crashes in the unified log) but I cannot physically speak into a microphone or click through a System Settings permission dialog. **The actual acceptance test — press ⌥+., say a sentence, watch text land in TextEdit — still needs a real person.** If you're an AI picking this up, ask the user whether that test has been run yet before assuming the transcription/insertion path actually works end-to-end in practice, not just in theory.
 
+PENDING USER VALIDATION (implemented, not yet confirmed working by a human):
+- microphone permission flow
+- Accessibility permission flow
+- live local transcription (WhisperKit)
+- focused-field insertion
+- clipboard fallback
+
+Development continued past this point per explicit user instruction — implemented-but-unconfirmed is an acceptable state to build on top of; just don't treat anything in the list above as *proven* until a human runs the test.
+
 ## Repo layout
 
 ```

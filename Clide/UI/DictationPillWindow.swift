@@ -7,9 +7,10 @@ import SwiftUI
 final class DictationPillWindow {
     private let panel: NSPanel
     private let hostingView: NSHostingView<DictationPillView>
+    private let amplitude = WaveformAmplitudeModel()
 
     init() {
-        let initialView = DictationPillView(state: .idle)
+        let initialView = DictationPillView(state: .idle, amplitude: amplitude)
         hostingView = NSHostingView(rootView: initialView)
         hostingView.frame = NSRect(x: 0, y: 0, width: 160, height: 40)
 
@@ -31,10 +32,17 @@ final class DictationPillWindow {
         panel.contentView = hostingView
     }
 
-    func update(state: PillState) {
-        hostingView.rootView = DictationPillView(state: state)
+    /// Drives a real state transition — resizes/repositions since the pill's
+    /// content (icon/text) changes. Not called for amplitude ticks; those go
+    /// through `updateAmplitude` and flow reactively via `amplitude` instead.
+    func present(state: PillState) {
+        hostingView.rootView = DictationPillView(state: state, amplitude: amplitude)
         resizeToFitAndReposition()
         state.isVisible ? show() : hide()
+    }
+
+    func updateAmplitude(_ level: Float) {
+        amplitude.level = level
     }
 
     private func resizeToFitAndReposition() {
