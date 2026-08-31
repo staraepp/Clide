@@ -5,16 +5,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var dictationCoordinator: DictationCoordinator?
     private let dashboardWindowController = DashboardWindowController()
+    private let onboardingWindowController = OnboardingWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpStatusItem()
-        dictationCoordinator = DictationCoordinator()
-        requestPermissionsIfNeeded()
+        let coordinator = DictationCoordinator()
+        dictationCoordinator = coordinator
 
-        // Clide has no Dock icon, so without this, launching it looks like
-        // nothing happened. Once launch-at-login exists this needs to skip
-        // login launches.
-        dashboardWindowController.show()
+        if OnboardingState.hasCompleted {
+            requestPermissionsIfNeeded()
+            // Clide has no Dock icon, so without this, launching it looks like
+            // nothing happened. Once launch-at-login is common this should skip
+            // login launches.
+            dashboardWindowController.show()
+        } else {
+            // Onboarding asks for each permission in context, so don't fire the
+            // system prompts before the user has been told what they're for.
+            onboardingWindowController.show(coordinator: coordinator) { [weak self] in
+                self?.dashboardWindowController.show()
+            }
+        }
     }
 
     /// Clicking the app in Finder/Spotlight while it's already running should

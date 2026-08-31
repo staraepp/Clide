@@ -11,6 +11,11 @@ final class DictationCoordinator {
     private let statistics: DictationStatistics
     private let pillWindow = DictationPillWindow()
 
+    /// When set, finished transcripts go here instead of being inserted into
+    /// the focused field — onboarding's practice dictation uses this so it can
+    /// show the result rather than typing it into whatever was behind the window.
+    var transcriptHandler: ((String, TimeInterval) -> Void)?
+
     private var state: PillState = .idle {
         didSet { pillWindow.present(state: state) }
     }
@@ -45,7 +50,9 @@ final class DictationCoordinator {
             Task { await requestMicrophoneThenRetry() }
             return
         }
-        guard PermissionsManager.accessibilityStatus() == .granted else {
+        // Only insertion needs Accessibility, so a practice dictation that just
+        // shows its result doesn't have to wait for that permission.
+        if transcriptHandler == nil, PermissionsManager.accessibilityStatus() != .granted {
             PermissionsManager.requestAccessibilityAccess()
             present(.error("Grant Accessibility access in System Settings, then try again"), autoHideAfter: 4)
             return
@@ -112,6 +119,13 @@ final class DictationCoordinator {
             let text = pipeline.process(rawTranscript).text
 
             statistics.record(transcript: text, speakingDuration: speakingDuration, model: model)
+
+            if let transcriptHandler {
+                transcriptHandler(text, speakingDuration)
+                state = .idle
+                return
+            }
+
             handle(TextInsertionService.insert(text))
         } catch {
             present(.error(error.localizedDescription), autoHideAfter: 3)

@@ -13,6 +13,10 @@ actor FluidAudioTranscriptionEngine: TranscriptionEngine {
         self.modelVersion = modelVersion
     }
 
+    func prepare() async throws {
+        _ = try await loadedManager()
+    }
+
     func transcribe(samples: [Float]) async throws -> String {
         let manager = try await loadedManager()
         var state = try currentDecoderState()

@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import SwiftUI
 
 /// Foundation settings surface — active model selection and the Groq BYOK key.
@@ -8,6 +9,7 @@ struct SettingsView: View {
     @ObservedObject private var modelManager = ModelManager.shared
     @ObservedObject private var formatting = FormattingPreferences.shared
     @ObservedObject private var statistics = DictationStatistics.shared
+    @ObservedObject private var launchAtLogin = LaunchAtLogin.shared
     @State private var groqAPIKey = KeychainService.groqAPIKey() ?? ""
     @State private var connectionStatus: ConnectionStatus = .unknown
     @State private var isTestingConnection = false
@@ -20,6 +22,24 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Dictation") {
+                KeyboardShortcuts.Recorder("Shortcut", name: .toggleDictation)
+
+                Text("Press it once to start, again to stop. Escape cancels.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("General") {
+                Toggle("Open Clide at login", isOn: $launchAtLogin.isEnabled)
+
+                if launchAtLogin.needsApproval {
+                    Text("macOS needs you to approve this in System Settings → General → Login Items.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
             Section("Transcription Model") {
                 Picker(
                     "Active model",

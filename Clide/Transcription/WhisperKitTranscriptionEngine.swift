@@ -12,6 +12,10 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
         self.modelName = modelName
     }
 
+    func prepare() async throws {
+        _ = try await loadedPipe()
+    }
+
     func transcribe(samples: [Float]) async throws -> String {
         let pipe = try await loadedPipe()
         let results = await pipe.transcribe(audioArrays: [samples])
