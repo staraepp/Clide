@@ -10,7 +10,9 @@ struct SettingsView: View {
     @ObservedObject private var formatting = FormattingPreferences.shared
     @ObservedObject private var statistics = DictationStatistics.shared
     @ObservedObject private var launchAtLogin = LaunchAtLogin.shared
+    @ObservedObject private var developer = DeveloperSettings.shared
     @State private var groqAPIKey = KeychainService.groqAPIKey() ?? ""
+    @State private var isShowingConsole = false
     @State private var connectionStatus: ConnectionStatus = .unknown
     @State private var isTestingConnection = false
 
@@ -117,10 +119,59 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Developer Data") {
+                Toggle("Share developer diagnostics with Clide", isOn: $developer.hasConsentedToDeveloperData)
+
+                Text("Off by default. Turning this on also unlocks Debug Mode, including a local console and developer tools.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("Your transcripts, recordings, API keys, custom vocabulary and clipboard contents stay on this Mac and are never included.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("No diagnostics are uploaded yet — Clide has no server to send them to. For now this only enables Debug Mode and local diagnostics.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+
+                HStack {
+                    Button("Copy Diagnostics") { DiagnosticsReport.copyToPasteboard() }
+                    Button("Export Diagnostics…") { DiagnosticsReport.export() }
+                    Spacer()
+                    Text("Clide \(DiagnosticsReport.appVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            if developer.isDebugModeEnabled {
+                Section("Developer") {
+                    Button("Open Console") { isShowingConsole = true }
+                    Button("Open Model Folder") {
+                        NSWorkspace.shared.open(ClideStorage.modelsDirectory)
+                    }
+                    Button("Run Onboarding Again") {
+                        OnboardingState.hasCompleted = false
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+        .sheet(isPresented: $isShowingConsole) {
+            VStack(spacing: 0) {
+                DeveloperConsoleView()
+                Divider()
+                HStack {
+                    Spacer()
+                    Button("Done") { isShowingConsole = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(10)
+            }
+        }
     }
 
     @ViewBuilder

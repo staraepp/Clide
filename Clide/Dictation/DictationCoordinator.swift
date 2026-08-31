@@ -17,12 +17,17 @@ final class DictationCoordinator {
     var transcriptHandler: ((String, TimeInterval) -> Void)?
 
     private var state: PillState = .idle {
-        didSet { pillWindow.present(state: state) }
+        didSet { pillWindow.present(state: state, choiceActions: pendingChoiceActions) }
     }
+    private var pendingChoiceActions: PillChoiceActions?
     private var isListening = false
     private var listeningStartedAt: Date?
     private var hideTask: Task<Void, Never>?
+    private var choiceTimeoutTask: Task<Void, Never>?
     private var escapeMonitor: Any?
+
+    /// How long the pill waits for a cleanup decision before inserting as-is.
+    private static let choiceTimeout: TimeInterval = 8
 
     init(
         modelManager: ModelManager = .shared,
@@ -108,39 +113,85 @@ final class DictationCoordinator {
 
     private func transcribeAndInsert(samples: [Float], speakingDuration: TimeInterval) async {
         let model = modelManager.activeModel
+        let startedAt = Date()
         do {
             let engine = modelManager.currentEngine()
             let rawTranscript = try await engine.transcribe(samples: samples)
+
+            // Word count, not content — see DiagnosticsLog's contract.
+            clideLog(
+                .info,
+                "transcribe",
+                "\(model.id) produced \(TimeSavedCalculator.wordCount(of: rawTranscript)) words "
+                    + "in \(String(format: "%.2f", Date().timeIntervalSince(startedAt)))s "
+                    + "from \(String(format: "%.1f", speakingDuration))s of audio"
+            )
 
             let pipeline = TranscriptPipeline(
                 fillerRemovalMode: formattingPreferences.fillerRemovalMode,
                 aiFormattingMode: formattingPreferences.aiFormattingMode
             )
-            let text = pipeline.process(rawTranscript).text
+            let output = pipeline.process(rawTranscript)
 
-            statistics.record(transcript: text, speakingDuration: speakingDuration, model: model)
+            statistics.record(transcript: output.text, speakingDuration: speakingDuration, model: model)
 
             if let transcriptHandler {
-                transcriptHandler(text, speakingDuration)
+                transcriptHandler(output.text, speakingDuration)
                 state = .idle
                 return
             }
 
-            handle(TextInsertionService.insert(text))
+            if output.pendingChoices.contains(.removeFillers) {
+                offerFillerChoice(for: output.text)
+                return
+            }
+
+            handle(TextInsertionService.insert(output.text))
         } catch {
+            clideLog(.error, "transcribe", "\(model.id) failed: \(error.localizedDescription)")
             present(.error(error.localizedDescription), autoHideAfter: 3)
+        }
+    }
+
+    /// Ask-each-time: the pill offers the cleanup rather than a modal, and
+    /// falls back to inserting the text as-is if the user doesn't answer —
+    /// never leaving a finished transcript stranded.
+    private func offerFillerChoice(for text: String) {
+        let insert: (String) -> Void = { [weak self] finalText in
+            guard let self else { return }
+            self.choiceTimeoutTask?.cancel()
+            self.choiceTimeoutTask = nil
+            self.pendingChoiceActions = nil
+            self.handle(TextInsertionService.insert(finalText))
+        }
+
+        hideTask?.cancel()
+        pendingChoiceActions = PillChoiceActions(
+            removeFillers: { insert(FillerWordRemover.removeFillers(from: text)) },
+            insertAsIs: { insert(text) }
+        )
+        state = .awaitingChoice
+
+        choiceTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.choiceTimeout))
+            guard !Task.isCancelled, self?.state == .awaitingChoice else { return }
+            insert(text)
         }
     }
 
     private func handle(_ outcome: InsertionOutcome) {
         switch outcome {
         case .insertedDirectly:
+            clideLog(.info, "insertion", "Inserted via Accessibility")
             present(.inserted, autoHideAfter: 1.2)
         case .copiedToClipboard:
+            clideLog(.warning, "insertion", "Direct insertion unavailable; used clipboard fallback")
             present(.copiedToClipboard, autoHideAfter: 2)
         case .secureFieldBlocked:
+            clideLog(.info, "insertion", "Secure field detected; nothing inserted")
             present(.secureFieldBlocked, autoHideAfter: 2.5)
         case .failed(let message):
+            clideLog(.error, "insertion", "Failed: \(message)")
             present(.error(message), autoHideAfter: 3)
         }
     }

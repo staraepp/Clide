@@ -11,6 +11,7 @@ final class WaveformAmplitudeModel: ObservableObject {
 struct DictationPillView: View {
     let state: PillState
     @ObservedObject var amplitude: WaveformAmplitudeModel
+    var choiceActions: PillChoiceActions?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -30,12 +31,44 @@ struct DictationPillView: View {
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
             }
+
+            if state == .awaitingChoice, let choiceActions {
+                PillButton(title: "Remove fillers", action: choiceActions.removeFillers)
+                PillButton(title: "Insert", action: choiceActions.insertAsIs, isProminent: true)
+            }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Capsule().fill(.black.opacity(0.85)))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: state)
+    }
+}
+
+private struct PillButton: View {
+    let title: String
+    let action: () -> Void
+    var isProminent: Bool = false
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(
+                        isProminent
+                            ? Color.accentColor.opacity(isHovering ? 1 : 0.85)
+                            : Color.white.opacity(isHovering ? 0.28 : 0.16)
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }
 

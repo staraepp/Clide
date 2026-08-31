@@ -35,8 +35,13 @@ final class DictationPillWindow {
     /// Drives a real state transition — resizes/repositions since the pill's
     /// content (icon/text) changes. Not called for amplitude ticks; those go
     /// through `updateAmplitude` and flow reactively via `amplitude` instead.
-    func present(state: PillState) {
-        hostingView.rootView = DictationPillView(state: state, amplitude: amplitude)
+    func present(state: PillState, choiceActions: PillChoiceActions? = nil) {
+        hostingView.rootView = DictationPillView(
+            state: state,
+            amplitude: amplitude,
+            choiceActions: choiceActions
+        )
+        panel.ignoresMouseEvents = !state.isInteractive
         resizeToFitAndReposition()
         state.isVisible ? show() : hide()
     }
