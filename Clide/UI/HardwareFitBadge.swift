@@ -8,6 +8,7 @@ struct HardwareFitBadge: View {
     var showsSummary: Bool = true
 
     @State private var isShowingExplanation = false
+    @State private var isHovering = false
 
     private var fit: HardwareFit { HardwareFit.evaluate(model: model) }
 
@@ -16,7 +17,7 @@ struct HardwareFitBadge: View {
             isShowingExplanation = true
         } label: {
             HStack(spacing: 5) {
-                StarRow(filled: fit.stars)
+                StarRow(filled: fit.stars, isAnimating: isHovering)
                 if showsSummary {
                     Text(fit.summary)
                         .font(.caption)
@@ -25,6 +26,7 @@ struct HardwareFitBadge: View {
             }
         }
         .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
         .help("Why this rating?")
         .accessibilityLabel("\(fit.stars) out of 5 stars. \(fit.summary). Click to find out why.")
         .popover(isPresented: $isShowingExplanation, arrowEdge: .bottom) {
@@ -38,27 +40,30 @@ private struct ExplanationView: View {
     let fit: HardwareFit
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Why this rating?")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 8) {
+                StarRow(filled: fit.stars, size: 11)
+                Text(fit.summary)
+                    .font(.clideDisplay(13))
+            }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 7) {
                 ForEach(fit.positives, id: \.self) { reason in
-                    ReasonRow(symbol: "checkmark", tint: .green, text: reason)
+                    ReasonRow(symbol: "checkmark", tint: ClideTheme.positive, text: reason)
                 }
                 ForEach(fit.cautions, id: \.self) { reason in
-                    ReasonRow(symbol: "exclamationmark.triangle", tint: .orange, text: reason)
+                    ReasonRow(symbol: "exclamationmark.triangle", tint: ClideTheme.caution, text: reason)
                 }
             }
 
-            Divider()
+            Rectangle().fill(ClideTheme.hairline).frame(height: 1)
 
             Text(model.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
+        .padding(15)
         .frame(width: 290, alignment: .leading)
     }
 }

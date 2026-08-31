@@ -30,9 +30,34 @@ So `clide.md` §5's "Apple Silicon first" is, in practice, Apple Silicon **only*
 
 **Build Release with `scripts/build-release.sh`**, which passes `ARCHS=arm64 ONLY_ACTIVE_ARCH=YES` on the command line. That override is required: SPM package targets in an Xcode project do **not** reliably inherit the project's `ARCHS`/`EXCLUDED_ARCHS`, so FluidAudio still gets compiled for x86_64 and fails even though `project.yml` sets both. The settings are in `project.yml` anyway to state intent; the command-line flags are what actually work.
 
+## ⚠️ Also read this: an NSEvent-monitor crash, and how to avoid it again
+
+**`ShortcutPressMonitor` (the dashboard/onboarding keycap highlighter) crashed with `EXC_BAD_ACCESS` in `swift_task_isCurrentExecutorWithFlagsImpl`** the first time this build was actually run and left key-window focus for more than a few seconds. Full crash report: `~/Library/Logs/DiagnosticReports/Clide-2026-08-31-084137.ips`.
+
+**Cause:** `NSEvent.addLocalMonitorForEvents(matching:handler:)`'s closure type isn't statically `@MainActor`, even though AppKit only ever invokes it on the main thread. The closure was written inline inside a `@MainActor` method and mutated a `@MainActor`-isolated `@Published` property (`self?.isOptionDown = …`) directly. That forces the Swift 6 runtime to do an executor-identity check before allowing the isolated access, and on this toolchain that check crashes (bad pointer deref inside `swift_getObjectType`) rather than just asserting — a toolchain bug, not a logic bug, but real either way.
+
+**Fix applied:** compute the new value inside the closure, then hop with `DispatchQueue.main.async { self?.isOptionDown = isDown }` instead of mutating directly. Plain GCD dispatch never invokes the Swift-concurrency executor-comparison path, so it sidesteps the crash entirely. A one-frame-later keycap highlight is imperceptible.
+
+**What this means for code:** any other `NSEvent` local/global monitor closure that touches a `@MainActor`/`@Published` property directly is at risk of the same crash on this toolchain. If you add one, route the mutation through `DispatchQueue.main.async` rather than assigning inline, even though the closure is in fact always called on the main thread.
+
+## ⚠️ One more: a real design system now exists — use it, don't hand-roll
+
+A full UI/animation pass (2026-08-31) replaced ad-hoc `.background(.quaternary)`/`Color.accentColor`/raw `.animation()` calls across every screen with a shared vocabulary in `Clide/UI/DesignSystem/` (see the source tree below). **Before writing any new view, check there first** — there is very likely already a primitive for what you need:
+
+- `ClideTheme` — the palette (`Clide/Resources/Assets.xcassets`, light **and** dark), spacing/radius constants, and named `Animation` curves (`.snap`, `.gentle`, `.pop`, `.hover`).
+- `.clideCard()`, `ClideSectionHeader`, `ClideRowGroup` — the card/list vocabulary every screen uses.
+- `ClideBadge`, `ClideChip`, `StarRow`, `RatingRow`, `ClideRecDot` — small status/rating primitives.
+- `.clidePrimary` / `.clideSecondary` / `.clideQuiet` button styles, `ClideIconButton`.
+- `ClideEmptyState` — every "nothing here yet" surface uses this, never a bare `Text`.
+- `.clideAnimation(_:value:)` / `.clideMotion { }` — **always use these instead of raw `.animation()`**. They collapse to a plain fade (or nothing, for `.clideMotion`) under Reduce Motion automatically; a bare `.animation()` call bypasses that and was the mechanism used to actually audit for missed cases (`grep -rn "\.animation(" Clide/` should only ever match the design-system internals and things already conditioned on `reduceMotion`).
+
+**The palette is not invented** — it's pulled from the actual Clide marketing site (the Next.js app the user runs at `localhost:3000`, repo separate from this one). Real values, so don't restyle away from them without checking that site first: brand cyan `#2FB9E6`/`#1293C4`/`#0C7FAE`, canvas `#F4F9FD`, ink text `#0A2338` (a navy, not pure black — `ClideTheme.ink`), panel radius `16pt`, Montserrat/DM Sans/Fragment Mono (approximated here with SF Rounded / SF Mono since those aren't bundled fonts). The small pulsing dot on the dashboard's "Ready to dictate" row (`ClideRecDot`) is a deliberate homage to the site's `.rec-dot` eyebrow indicator, animation curve matched exactly (1.8s ease-in-out, 1→0.35 opacity, disabled under Reduce Motion).
+
+**Visual QA note for whoever does this next:** screenshotting the running app via `screencapture -R<window-frame-from-AX>` is unreliable on this machine when the user has other windows open on other Spaces — AX geometry for Clide's window is correct even when it isn't the physically frontmost thing on screen, so region-captures can silently grab a *different, unrelated* window (this happened twice this session and briefly exposed unrelated content from the user's other conversations — nothing was acted on, but don't repeat it blindly). If you need to visually verify a screen, prefer asking the user to look, or explicitly confirm the target window is on the currently active Space first.
+
 ## What exists right now
 
-Everything below **builds clean with zero warnings in app code** under Swift 6 strict concurrency, and **74 unit tests pass** (`xcodebuild -project Clide.xcodeproj -scheme Clide -destination 'platform=macOS' test`).
+Everything below **builds clean with zero warnings in app code** under Swift 6 strict concurrency, and **78 unit tests pass** (`xcodebuild -project Clide.xcodeproj -scheme Clide -destination 'platform=macOS' test`).
 
 The sacred path:
 
@@ -44,11 +69,12 @@ Built so far, roughly spec milestones 0.1 through most of 0.5:
 - **Transcription**: `TranscriptionEngine` protocol with six implementations — WhisperKit, FluidAudio/Parakeet, Apple Speech (all local), plus Groq, Deepgram and AssemblyAI (BYOK cloud). `ModelManager` owns selection, engine caching, install state and download.
 - **Model catalog**: eleven models with full metadata (§12), explainable hardware-fit ratings computed from real sysctl values (§13), a card/table model browser with search and filters (§14), and existing-model discovery over an allowlist of known paths (§15).
 - **Formatting**: deterministic cleanup (always), conservative filler-word removal, and **real AI formatting** via Apple's on-device `SystemLanguageModel`, gated behind `#available(macOS 26)` and reporting a specific reason when unavailable.
-- **Dashboard**: greeting, readiness card with live keycaps, today's totals led by time-saved, recent activity (when history is on), model list, one-time Settings spotlight.
-- **Onboarding**: welcome → mic → accessibility → model prep (with discovery) → real practice dictation → result with time saved → formatting prefs → done.
+- **Dashboard**: greeting, readiness card with live keycaps and a breathing status dot, today's totals led by time-saved, recent activity (when history is on, with its own empty state), model list, one-time Settings spotlight.
+- **Onboarding**: welcome → mic → accessibility → model prep (with discovery) → real practice dictation → result with time saved → formatting prefs → done, with sliding step transitions and a spring-in success moment.
 - **Settings**: shortcut recorder, launch at login, model picker + browser, all three cloud provider keys with Test Connection, formatting, privacy, developer-data consent, Debug Mode console.
 - **Privacy**: opt-in transcript history (off by default, the only place transcripts are kept), counters-only statistics, opt-in developer diagnostics.
 - **Diagnostics**: bounded local log, sanitized report, copy/export.
+- **Design system** (`Clide/UI/DesignSystem/`): a real shared visual language — palette pulled from the actual clide.dev marketing site, spacing/radius/animation tokens, card/badge/button/empty-state primitives — applied consistently across every screen (dashboard, model browser, onboarding, pill, settings). Reduce Motion is respected everywhere via `.clideAnimation`/`.clideMotion`. See the dedicated ⚠️ section above before adding new UI.
 
 ### PENDING USER VALIDATION
 
@@ -155,6 +181,15 @@ UI/
   PillState.swift / DictationPillView.swift / DictationPillWindow.swift  non-activating NSPanel
   KeycapView.swift              reusable physical keycap, used by dashboard + onboarding
   HardwareFitBadge.swift        stars + "why this rating?" popover
+  ClideWaveform.swift            shared amplitude-driven waveform bars (pill + previews)
+  DesignSystem/
+    ClideTheme.swift             palette, spacing/radius, named Animation curves, Reduce-Motion helpers
+    ClideSurfaces.swift          .clideCard(), ClideSectionHeader, ClideRowGroup
+    ClideBadges.swift            ClideBadge, ClideChip, StarRow, RatingRow, ClideRecDot
+    ClideButtons.swift           .clidePrimary/.clideSecondary/.clideQuiet button styles, ClideIconButton
+    ClideEmptyState.swift        the one "nothing here yet" component every screen uses
+Resources/
+  Assets.xcassets                the design system's colours, light + dark, sourced from clide.dev
 ClideTests/                     Swift Testing; 34 tests over the pure logic
 ```
 
@@ -182,16 +217,16 @@ Went and checked the actual SDK headers / library source rather than trusting tr
 
 ## What's next
 
-Roughly in dependency order, all still unbuilt:
+The items this list used to name as unbuilt (Deepgram/AssemblyAI, mic selection, push-to-talk, transcript history, the AI formatter) are **done** — see "What exists right now" above; this section had gone stale. What's actually still open, roughly in order:
 
-1. **Get the pending-validation list above actually confirmed by a human.** Everything else is less important than knowing the sacred path works.
-2. **Deepgram + AssemblyAI** BYOK providers (§10). Groq's engine is a reasonable template. Verify both APIs from their real docs — a research pass during this session got a Deepgram doc URL that 404'd, so nothing about either API is confirmed yet. AssemblyAI is upload → create → poll, so it needs a different shape from Groq's single request.
-3. **Microphone selection + device-change/sleep-wake handling** (§8). Selecting an input device on `AVAudioEngine` means setting `kAudioOutputUnitProperty_CurrentDevice` on the input unit *before* starting the engine.
-4. **Push-to-talk** as an alternative to toggle (§7).
-5. **Transcript history** (§27) with its own hard off switch, separate from statistics.
-6. **Model download progress + model manager UI** (§14) — engines currently download silently inside `prepare()`.
-7. **An actual AI formatter** (§22), which would make the existing preference mean something.
-8. **Signing/notarization** (§41, 0.8 milestone) — which also makes the Accessibility trap at the top of this file go away.
+1. **Get the PENDING USER VALIDATION list above actually confirmed by a human.** Nothing involving a live microphone, a real API key, or Apple Intelligence output has been run end-to-end by a person yet. Everything else is less important than knowing the sacred path works.
+2. **Model download progress** — `ModelManager.prepare()` and both local engines' `prepare()` still show an indeterminate spinner rather than a percentage; neither WhisperKit's nor FluidAudio's download call surfaces progress through the current `TranscriptionEngine` protocol, even though both libraries expose progress handlers internally.
+3. **Existing-model discovery reuse-in-place** (§15) — `ExistingModelDiscovery` detects compatible models elsewhere on disk but Clide still downloads its own copy rather than referencing them.
+4. **Sleep/wake recovery and mid-recording device disconnect** (§8) — device *enumeration* reacts to changes, but a microphone unplugged mid-dictation isn't recovered from.
+5. **Clide Mini** local fallback formatter (§22) — today AI formatting is Apple Intelligence or nothing; there's no local model to fall back to on older macOS/hardware.
+6. **Signing/notarization** (§41, 0.8 milestone) — also makes the Accessibility-nagging trap at the top of this file go away for good.
+
+A full UI/animation pass (dashboard, model browser, onboarding, pill, settings, dev console) landed 2026-08-31 — see the design-system ⚠️ section near the top before styling anything new.
 
 ## Git / GitHub
 

@@ -7,7 +7,7 @@ struct ModelBrowserSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             ModelBrowserView()
-            Divider()
+            Rectangle().fill(ClideTheme.hairline).frame(height: 1)
             HStack {
                 Text("Accuracy and speed are estimates from each model's published benchmarks. Hardware Fit is calculated for this Mac.")
                     .font(.caption2)
@@ -15,8 +15,10 @@ struct ModelBrowserSheet: View {
                 Spacer()
                 Button("Done") { isPresented = false }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.clidePrimary)
             }
-            .padding(10)
+            .padding(12)
+            .background(ClideTheme.canvas)
         }
     }
 }

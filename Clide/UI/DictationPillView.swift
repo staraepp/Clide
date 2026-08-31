@@ -57,18 +57,28 @@ struct DictationPillView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(.black.opacity(0.85))
-                .overlay(
-                    Capsule().strokeBorder(
-                        state.isAdvisory ? Color.orange.opacity(0.55) : .white.opacity(0.08),
-                        lineWidth: 1
-                    )
-                )
-                .shadow(color: .black.opacity(0.28), radius: 12, y: 4)
-        )
-        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: state)
+        .background(pillBackground)
+        .clideAnimation(ClideTheme.Motion.snap, value: state)
+    }
+
+    private var pillBackground: some View {
+        Capsule()
+            .fill(.black.opacity(0.85))
+            .overlay(
+                Capsule().strokeBorder(edgeColor.opacity(state.tone == .neutral ? 0.08 : 0.6), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.28), radius: 12, y: 4)
+            .shadow(color: edgeColor.opacity(state.tone == .neutral ? 0 : 0.25), radius: 14, y: 0)
+    }
+
+    private var edgeColor: Color {
+        switch state.tone {
+        case .neutral: return .white
+        case .success: return ClideTheme.positive
+        case .clipboard: return ClideTheme.accent
+        case .caution: return ClideTheme.caution
+        case .error: return .red
+        }
     }
 
     /// The waveform is the pill's own instrument, so it collapses into the
@@ -76,11 +86,14 @@ struct DictationPillView: View {
     @ViewBuilder
     private var leadingGlyph: some View {
         if state == .listening {
-            WaveformView(level: amplitude.level, reduceMotion: reduceMotion)
+            ClideWaveform(level: amplitude.level, height: 16, tint: .white)
                 .frame(width: 28, height: 16)
                 .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+        } else if state == .formatting {
+            SparkleGlyph(reduceMotion: reduceMotion)
+                .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
         } else {
-            PillSymbol(state: state, reduceMotion: reduceMotion)
+            PillSymbol(state: state, tint: edgeColor, reduceMotion: reduceMotion)
                 .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
         }
     }
@@ -94,12 +107,13 @@ struct DictationPillView: View {
     }
 
     private var appearance: Animation? {
-        reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.34, dampingFraction: 0.72)
+        reduceMotion ? ClideTheme.Motion.reduced : .spring(response: 0.34, dampingFraction: 0.72)
     }
 }
 
 private struct PillSymbol: View {
     let state: PillState
+    let tint: Color
     let reduceMotion: Bool
 
     var body: some View {
@@ -107,6 +121,7 @@ private struct PillSymbol: View {
             .font(.system(size: 14, weight: .semibold))
             .frame(width: 18)
             .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(state.tone == .neutral ? .white : tint)
             .modifier(SymbolMotion(state: state, reduceMotion: reduceMotion))
             .contentTransition(.symbolEffect(.replace))
     }
@@ -128,6 +143,28 @@ private struct SymbolMotion: ViewModifier {
     }
 }
 
+/// A quiet shimmer for the formatting step — three sparkle glyphs that fade in
+/// and out slightly out of phase, so it reads as texture rather than a spinner.
+private struct SparkleGlyph: View {
+    let reduceMotion: Bool
+    @State private var isShimmering = false
+
+    var body: some View {
+        Image(systemName: "sparkles")
+            .font(.system(size: 14, weight: .semibold))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(ClideTheme.accent.opacity(0.95))
+            .frame(width: 18)
+            .clideMotion { glyph in
+                glyph
+                    .opacity(isShimmering ? 1 : 0.55)
+                    .scaleEffect(isShimmering ? 1.08 : 0.94)
+                    .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: isShimmering)
+            }
+            .onAppear { isShimmering = true }
+    }
+}
+
 private struct PillButton: View {
     let title: String
     let action: () -> Void
@@ -146,45 +183,15 @@ private struct PillButton: View {
                 .background(
                     Capsule().fill(
                         isProminent
-                            ? Color.accentColor.opacity(isHovering ? 1 : 0.85)
+                            ? ClideTheme.accent.opacity(isHovering ? 1 : 0.88)
                             : Color.white.opacity(isHovering ? 0.28 : 0.16)
                     )
                 )
-                .scaleEffect(isHovering && !reduceMotion ? 1.04 : 1)
+                .clideMotion { label in label.scaleEffect(isHovering ? 1.04 : 1) }
         }
         .buttonStyle(.plain)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
+        .clideAnimation(ClideTheme.Motion.hover, value: isHovering)
         .onHover { isHovering = $0 }
-    }
-}
-
-/// Bars that react to microphone amplitude. Each bar eases at a slightly
-/// different rate so the movement reads as organic rather than mechanical.
-private struct WaveformView: View {
-    let level: Float
-    let reduceMotion: Bool
-
-    private let variance: [CGFloat] = [0.55, 1.0, 0.78, 0.45]
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(variance.indices, id: \.self) { index in
-                Capsule()
-                    .fill(.white)
-                    .frame(width: 3, height: barHeight(variance[index]))
-                    .animation(
-                        reduceMotion ? nil : .easeOut(duration: 0.09 + Double(index) * 0.015),
-                        value: level
-                    )
-            }
-        }
-        .frame(height: 16)
-    }
-
-    private func barHeight(_ variance: CGFloat) -> CGFloat {
-        let base: CGFloat = 4
-        let boost = CGFloat(min(max(level * 70, 0), 16))
-        return min(base + boost * variance, 16)
     }
 }
 

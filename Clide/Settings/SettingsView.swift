@@ -23,9 +23,10 @@ struct SettingsView: View {
     /// open rather than showing a stale state. This only reads the status —
     /// it never triggers the system prompt.
     private let statusPoll = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     var body: some View {
         Form {
-            Section("Dictation") {
+            Section {
                 KeyboardShortcuts.Recorder("Shortcut", name: .toggleDictation)
 
                 Picker("When you press it", selection: $dictation.activation) {
@@ -34,9 +35,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Escape cancels a recording in progress.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                caption("Escape cancels a recording in progress.")
 
                 Picker("Microphone", selection: $audioDevices.selectedDeviceUID) {
                     Text("System default").tag(String?.none)
@@ -46,44 +45,38 @@ struct SettingsView: View {
                 }
 
                 if audioDevices.selectedDeviceIsMissing {
-                    Text("That microphone isn't connected right now, so Clide will use the system default.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    caution("That microphone isn't connected right now, so Clide will use the system default.")
                 }
 
                 LabeledContent("Accessibility") {
                     HStack(spacing: 8) {
                         if accessibilityStatus == .granted {
-                            Label("Granted", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.callout)
+                            ClideBadge(text: "Granted", symbol: "checkmark", tone: .positive)
                         } else {
-                            Label("Not granted", systemImage: "exclamationmark.circle.fill")
-                                .foregroundStyle(.orange)
-                                .font(.callout)
+                            ClideBadge(text: "Not granted", symbol: "exclamationmark", tone: .caution)
                         }
                         Button("Open Settings") { PermissionsManager.openAccessibilitySettings() }
                     }
                 }
 
                 if accessibilityStatus != .granted {
-                    Text("Without it Clide still transcribes and copies the text to your clipboard — it just can't type it for you.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    caption("Without it Clide still transcribes and copies the text to your clipboard — it just can't type it for you.")
                 }
+            } header: {
+                SectionLabel("Dictation", symbol: "mic.fill")
             }
 
-            Section("General") {
+            Section {
                 Toggle("Open Clide at login", isOn: $launchAtLogin.isEnabled)
 
                 if launchAtLogin.needsApproval {
-                    Text("macOS needs you to approve this in System Settings → General → Login Items.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    caution("macOS needs you to approve this in System Settings → General → Login Items.")
                 }
+            } header: {
+                SectionLabel("General", symbol: "gearshape.fill")
             }
 
-            Section("Transcription Model") {
+            Section {
                 Picker(
                     "Active model",
                     selection: Binding(
@@ -97,29 +90,33 @@ struct SettingsView: View {
                     }
                 }
 
-                Button("Browse Models…") { isShowingModelBrowser = true }
+                HStack {
+                    HardwareFitBadge(model: modelManager.activeModel)
+                    Spacer()
+                    Button("Browse Models…") { isShowingModelBrowser = true }
+                }
+            } header: {
+                SectionLabel("Transcription Model", symbol: "cube.fill")
             }
 
-            Section("Cloud Providers") {
-                Text("Bring your own key. Audio goes straight from this Mac to the provider you pick — never through a Clide server.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section {
+                caption("Bring your own key. Audio goes straight from this Mac to the provider you pick — never through a Clide server.")
 
                 ForEach(CloudProvider.allCases) { provider in
                     CloudProviderRow(provider: provider)
                 }
+            } header: {
+                SectionLabel("Cloud Providers", symbol: "cloud.fill")
             }
 
-            Section("Formatting") {
+            Section {
                 Picker("Filler word removal", selection: $formatting.fillerRemovalMode) {
                     ForEach(FormattingMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)
                     }
                 }
 
-                Text("Removes “um” and “uh”. Words like “so” and “well” are left alone — they're too often part of what you meant.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                caption("Removes “um” and “uh”. Words like “so” and “well” are left alone — they're too often part of what you meant.")
 
                 Picker("AI formatting", selection: $formatting.aiFormattingMode) {
                     ForEach(FormattingMode.allCases) { mode in
@@ -129,17 +126,15 @@ struct SettingsView: View {
                 .disabled(!formatter.isAvailable)
 
                 if formatter.isAvailable {
-                    Text("Uses \(formatter.displayName) on this Mac to punctuate and paragraph your dictation. It never changes your wording, and dictation still works if it fails.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    caption("Uses \(formatter.displayName) on this Mac to punctuate and paragraph your dictation. It never changes your wording, and dictation still works if it fails.")
                 } else {
-                    Text(formatter.unavailableReason ?? "No on-device formatter is available on this Mac.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    caution(formatter.unavailableReason ?? "No on-device formatter is available on this Mac.")
                 }
+            } header: {
+                SectionLabel("Formatting", symbol: "sparkles")
             }
 
-            Section("Privacy") {
+            Section {
                 Toggle("Save transcript history", isOn: $history.isEnabled)
 
                 if history.isEnabled {
@@ -152,9 +147,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Off by default. This is the only place Clide keeps what you actually said — turning it off deletes what's stored.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                caption("Off by default. This is the only place Clide keeps what you actually said — turning it off deletes what's stored.")
 
                 Divider()
 
@@ -168,25 +161,17 @@ struct SettingsView: View {
                         .disabled(statistics.records.isEmpty)
                 }
 
-                Text("Statistics are counters only — they stay on this Mac and never include what you said.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                caption("Statistics are counters only — they stay on this Mac and never include what you said.")
+            } header: {
+                SectionLabel("Privacy", symbol: "lock.fill")
             }
 
-            Section("Developer Data") {
+            Section {
                 Toggle("Share developer diagnostics with Clide", isOn: $developer.hasConsentedToDeveloperData)
 
-                Text("Off by default. Turning this on also unlocks Debug Mode, including a local console and developer tools.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text("Your transcripts, recordings, API keys, custom vocabulary and clipboard contents stay on this Mac and are never included.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text("No diagnostics are uploaded yet — Clide has no server to send them to. For now this only enables Debug Mode and local diagnostics.")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                caption("Off by default. Turning this on also unlocks Debug Mode, including a local console and developer tools.")
+                caption("Your transcripts, recordings, API keys, custom vocabulary and clipboard contents stay on this Mac and are never included.")
+                caution("No diagnostics are uploaded yet — Clide has no server to send them to. For now this only enables Debug Mode and local diagnostics.")
 
                 HStack {
                     Button("Copy Diagnostics") { DiagnosticsReport.copyToPasteboard() }
@@ -196,10 +181,12 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+            } header: {
+                SectionLabel("Developer Data", symbol: "chart.bar.doc.horizontal.fill")
             }
 
             if developer.isDebugModeEnabled {
-                Section("Developer") {
+                Section {
                     Button("Open Console") { isShowingConsole = true }
                     Button("Open Model Folder") {
                         NSWorkspace.shared.open(ClideStorage.modelsDirectory)
@@ -207,12 +194,15 @@ struct SettingsView: View {
                     Button("Run Onboarding Again") {
                         OnboardingState.hasCompleted = false
                     }
+                } header: {
+                    SectionLabel("Developer", symbol: "hammer.fill")
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460)
+        .frame(width: 470)
         .fixedSize(horizontal: false, vertical: true)
+        .clideCanvas()
         .onReceive(statusPoll) { _ in
             accessibilityStatus = PermissionsManager.accessibilityStatus()
         }
@@ -222,14 +212,48 @@ struct SettingsView: View {
         .sheet(isPresented: $isShowingConsole) {
             VStack(spacing: 0) {
                 DeveloperConsoleView()
-                Divider()
+                Rectangle().fill(ClideTheme.hairline).frame(height: 1)
                 HStack {
                     Spacer()
                     Button("Done") { isShowingConsole = false }
                         .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.clidePrimary)
                 }
                 .padding(10)
             }
+        }
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private func caution(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(ClideTheme.caution)
+    }
+}
+
+/// A section header with a small tinted icon, so the form reads at a glance
+/// rather than as a stack of identical grey labels.
+private struct SectionLabel: View {
+    let title: String
+    let symbol: String
+
+    init(_ title: String, symbol: String) {
+        self.title = title
+        self.symbol = symbol
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: symbol)
+                .foregroundStyle(ClideTheme.accent)
         }
     }
 }
@@ -286,28 +310,31 @@ private struct CloudProviderRow: View {
         switch status {
         case .idle:
             if provider.hasAPIKey {
-                Text("Key saved").font(.caption).foregroundStyle(.secondary)
+                ClideBadge(text: "Key saved", tone: .neutral)
             } else {
                 Text("Not set up").font(.caption).foregroundStyle(.tertiary)
             }
         case .testing:
             ProgressView().controlSize(.small)
         case .success:
-            Label("Connected", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green).font(.caption)
+            ClideBadge(text: "Connected", symbol: "checkmark", tone: .positive)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
         case .failure(let message):
-            Label(message, systemImage: "xmark.circle.fill")
-                .foregroundStyle(.red).font(.caption)
+            ClideBadge(text: message, symbol: "xmark", tone: .caution)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
         }
     }
 
     private func test() async {
         status = .testing
-        switch await provider.testConnection() {
-        case .success:
-            status = .success
-        case .failure(let error):
-            status = .failure(error.errorDescription ?? "Couldn't connect")
+        let result = await provider.testConnection()
+        withAnimation(ClideTheme.Motion.pop) {
+            switch result {
+            case .success:
+                status = .success
+            case .failure(let error):
+                status = .failure(error.errorDescription ?? "Couldn't connect")
+            }
         }
     }
 }

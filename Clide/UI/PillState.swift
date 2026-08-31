@@ -84,13 +84,25 @@ enum PillState: Equatable {
     }
 
     /// Something the user may need to act on, versus a routine confirmation.
-    var isAdvisory: Bool {
+    var isAdvisory: Bool { tone != .neutral && tone != .success }
+
+    /// How the pill should read at a glance. Clipboard fallback is a calm,
+    /// informational moment — it worked, just not the ideal way — so it gets
+    /// its own tone rather than sharing the red of a genuine failure.
+    enum Tone { case neutral, success, clipboard, caution, error }
+
+    var tone: Tone {
         switch self {
-        case .copiedAfterInsertionFailed, .copiedNeedsAccessibility, .copiedUnsupportedField,
-             .secureFieldBlocked, .microphoneUnavailable, .error:
-            return true
-        default:
-            return false
+        case .idle, .modelLoading, .listening, .transcribing, .formatting, .awaitingChoice:
+            return .neutral
+        case .inserted:
+            return .success
+        case .copiedAfterInsertionFailed, .copiedNeedsAccessibility, .copiedUnsupportedField:
+            return .clipboard
+        case .secureFieldBlocked, .microphoneUnavailable:
+            return .caution
+        case .error:
+            return .error
         }
     }
 }

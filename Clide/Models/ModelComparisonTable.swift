@@ -10,7 +10,7 @@ struct ModelComparisonTable: View {
             TableColumn("Model") { model in
                 HStack(spacing: 6) {
                     if model.id == modelManager.activeModelID {
-                        Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                        Circle().fill(ClideTheme.accent).frame(width: 6, height: 6)
                     }
                     Text(model.displayName)
                 }
@@ -21,8 +21,10 @@ struct ModelComparisonTable: View {
             }
 
             TableColumn("Where") { model in
-                Text(model.isLocal ? "On this Mac" : "Cloud")
-                    .foregroundStyle(model.isLocal ? .green : .secondary)
+                ClideBadge(
+                    text: model.isLocal ? "On this Mac" : "Cloud",
+                    tone: model.isLocal ? .positive : .neutral
+                )
             }
 
             TableColumn("Size") { model in
@@ -43,12 +45,14 @@ struct ModelComparisonTable: View {
 
             TableColumn("") { model in
                 if model.id == modelManager.activeModelID {
-                    Text("Active").font(.caption).foregroundStyle(Color.accentColor)
+                    Text("Active").font(.caption).foregroundStyle(ClideTheme.accent)
                 } else {
                     Button("Use") { modelManager.setActiveModel(model.id) }
-                        .controlSize(.small)
+                        .buttonStyle(.clideQuiet)
+                        .font(.caption)
                 }
             }
         }
+        .clideCanvas()
     }
 }

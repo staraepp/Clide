@@ -13,13 +13,14 @@ struct DeveloperConsoleView: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            Divider()
+            Rectangle().fill(ClideTheme.hairline).frame(height: 1)
 
             if visibleEntries.isEmpty {
-                ContentUnavailableView(
-                    "No log entries",
-                    systemImage: "text.alignleft",
-                    description: Text("Activity shows up here as you use Clide.")
+                ClideEmptyState(
+                    symbol: "text.alignleft",
+                    title: "No log entries",
+                    message: "Activity shows up here as you use Clide.",
+                    tone: .neutral
                 )
                 .frame(maxHeight: .infinity)
             } else {
@@ -31,6 +32,7 @@ struct DeveloperConsoleView: View {
             }
         }
         .frame(minWidth: 520, minHeight: 380)
+        .clideCanvas()
     }
 
     private var toolbar: some View {
@@ -85,8 +87,8 @@ private struct LogRow: View {
     private var tint: Color {
         switch entry.level {
         case .debug: return .secondary
-        case .info: return .blue
-        case .warning: return .orange
+        case .info: return ClideTheme.accent
+        case .warning: return ClideTheme.caution
         case .error: return .red
         }
     }

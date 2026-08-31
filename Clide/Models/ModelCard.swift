@@ -12,10 +12,10 @@ struct ModelCard: View {
     let onDelete: () -> Void
 
     @State private var isHovering = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var justFinishedInstalling = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 11) {
             header
             Text(model.summary)
                 .font(.callout)
@@ -23,63 +23,59 @@ struct ModelCard: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if !model.capabilityTags.isEmpty {
-                TagRow(tags: model.capabilityTags)
+                HStack(spacing: 5) {
+                    ForEach(model.capabilityTags, id: \.self) { ClideChip(text: $0) }
+                }
             }
 
             ratings
-            Divider()
+
+            Rectangle().fill(ClideTheme.hairline).frame(height: 1)
+
             footer
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(.quaternary.opacity(isHovering ? 0.55 : 0.35))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .strokeBorder(isActive ? Color.accentColor.opacity(0.7) : .clear, lineWidth: 1.5)
-        )
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovering)
+        .clideCard(isHighlighted: isActive, isHovering: isHovering)
         .onHover { isHovering = $0 }
+        .onChange(of: isInstalled) { _, installed in
+            guard installed else { return }
+            justFinishedInstalling = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                justFinishedInstalling = false
+            }
+        }
     }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(model.displayName)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.clideDisplay(14.5))
 
-            Text(model.runtime.displayName)
-                .font(.caption2.weight(.medium))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(.quaternary))
+            ClideChip(text: model.runtime.displayName)
 
             if isActive {
-                Text("Active")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
+                ClideBadge(text: "Active", symbol: "checkmark", tone: .accent)
             }
 
             Spacer(minLength: 0)
 
-            Label(
-                model.isLocal ? "On this Mac" : "Cloud",
-                systemImage: model.isLocal ? "lock.fill" : "cloud"
+            ClideBadge(
+                text: model.isLocal ? "On this Mac" : "Cloud",
+                symbol: model.isLocal ? "lock.fill" : "cloud",
+                tone: model.isLocal ? .positive : .neutral
             )
-            .font(.caption)
-            .foregroundStyle(model.isLocal ? .green : .secondary)
         }
     }
 
     private var ratings: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            RatingRow(label: "Accuracy", stars: model.accuracyScore)
-            RatingRow(label: "Speed", stars: model.speedScore)
+        VStack(alignment: .leading, spacing: 4) {
+            RatingRow(label: "Accuracy", stars: model.accuracyScore, isAnimating: isHovering)
+            RatingRow(label: "Speed", stars: model.speedScore, isAnimating: isHovering)
             HStack(spacing: 8) {
                 Text("Hardware Fit")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(width: 82, alignment: .leading)
+                    .frame(width: 78, alignment: .leading)
                 HardwareFitBadge(model: model)
             }
         }
@@ -88,96 +84,70 @@ struct ModelCard: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Text(model.languageSummary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             Text("·").foregroundStyle(.tertiary)
-
             Text(model.formattedDownloadSize)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            actions
         }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .overlay(alignment: .trailing) { actions }
     }
 
     @ViewBuilder
     private var actions: some View {
-        if isPreparing {
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Downloading…").font(.caption).foregroundStyle(.secondary)
-            }
-        } else if isActive {
-            Label("In use", systemImage: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(Color.accentColor)
-        } else {
-            HStack(spacing: 6) {
-                if model.isLocal, !isInstalled {
-                    Button("Download", action: onDownload)
-                } else if model.isLocal, isInstalled {
-                    Button("Delete", action: onDelete)
+        Group {
+            if isPreparing {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Downloading…")
                 }
-
-                Button("Use", action: onUse)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(!isReady && !model.isLocal)
-            }
-        }
-    }
-}
-
-/// A labelled 1–5 star row. These are published-benchmark estimates, not
-/// measurements — `ModelCard` shows them beside the computed Hardware Fit.
-struct RatingRow: View {
-    let label: String
-    let stars: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(width: 82, alignment: .leading)
-            StarRow(filled: stars)
+            } else if justFinishedInstalling {
+                Label("Ready", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(ClideTheme.positive)
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+            } else if isActive {
+                Label("In use", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(ClideTheme.accent)
+            } else {
+                HStack(spacing: 6) {
+                    if model.isLocal, !isInstalled {
+                        Button("Download", action: onDownload)
+                            .buttonStyle(.clideSecondary)
+                    } else if model.isLocal, isInstalled {
+                        Button("Delete", action: onDelete)
+                            .buttonStyle(.clideQuiet)
+                    }
+
+                    Button("Use", action: onUse)
+                        .buttonStyle(.clidePrimary)
+                        .disabled(!isReady && !model.isLocal)
+                }
+            }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(stars) out of 5")
+        .clideAnimation(ClideTheme.Motion.pop, value: isPreparing)
+        .clideAnimation(ClideTheme.Motion.pop, value: justFinishedInstalling)
     }
 }
 
-struct StarRow: View {
-    let filled: Int
-    var tint: Color = .accentColor
-
-    var body: some View {
-        HStack(spacing: 1) {
-            ForEach(1...5, id: \.self) { index in
-                Image(systemName: index <= filled ? "star.fill" : "star")
-                    .font(.system(size: 9))
-                    .foregroundStyle(index <= filled ? tint : Color.secondary.opacity(0.35))
-            }
+#Preview {
+    VStack(spacing: 10) {
+        ForEach(ModelCatalog.all.prefix(3)) { model in
+            ModelCard(
+                model: model,
+                isActive: model.id == ModelCatalog.defaultModelID,
+                isInstalled: true,
+                isPreparing: false,
+                isReady: true,
+                onUse: {},
+                onDownload: {},
+                onDelete: {}
+            )
         }
     }
-}
-
-private struct TagRow: View {
-    let tags: [String]
-
-    var body: some View {
-        HStack(spacing: 5) {
-            ForEach(tags, id: \.self) { tag in
-                Text(tag)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(.quaternary.opacity(0.6)))
-            }
-        }
-    }
+    .padding(20)
+    .frame(width: 520)
+    .clideCanvas()
 }

@@ -15,7 +15,8 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(Self.greeting)
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                        .font(.clideDisplay(26))
+                        .foregroundStyle(ClideTheme.ink)
                     Spacer()
                     SettingsButton(isSpotlighted: isSpotlightingSettings)
                 }
@@ -23,18 +24,20 @@ struct DashboardView: View {
                 ReadinessCard(model: modelManager.activeModel, monitor: shortcutMonitor)
                 TodaySection(summary: statistics.todaySummary, isEnabled: statistics.isEnabled)
 
-                // History is off by default, so this section simply isn't
-                // there rather than sitting empty (clide.md §25).
-                if history.isEnabled, !history.entries.isEmpty {
+                if history.isEnabled {
                     RecentActivitySection(entries: Array(history.entries.prefix(4)))
                 }
 
                 ModelsSection(modelManager: modelManager, isShowingBrowser: $isShowingBrowser)
             }
             .padding(24)
+            // The window has a transparent, full-size-content titlebar, so
+            // SwiftUI content starts at y=0 — without this the greeting sits
+            // directly behind the traffic-light buttons.
+            .padding(.top, 14)
         }
-        .frame(minWidth: 440, minHeight: 400)
-        .background(.background)
+        .frame(minWidth: 460, minHeight: 420)
+        .clideCanvas()
         .onAppear {
             shortcutMonitor.start()
             runSettingsSpotlightIfNeeded()
@@ -95,22 +98,19 @@ private struct SettingsButton: View {
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15))
-                    .foregroundStyle(isSpotlighted ? Color.accentColor : .secondary)
+                    .foregroundStyle(isSpotlighted ? ClideTheme.accent : .secondary)
                     .padding(7)
                     .background(
                         Circle()
-                            .fill(isSpotlighted ? Color.accentColor.opacity(0.15) : .clear)
+                            .fill(isSpotlighted ? ClideTheme.accentWash : (isHovering ? Color.primary.opacity(0.06) : .clear))
                     )
-                    .scaleEffect(isSpotlighted && !reduceMotion ? 1.12 : (isHovering ? 1.05 : 1))
+                    .clideMotion { icon in icon.scaleEffect(isSpotlighted ? 1.12 : (isHovering ? 1.05 : 1)) }
             }
             .buttonStyle(.plain)
             .help("Settings")
             .onHover { isHovering = $0 }
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.6),
-                value: isSpotlighted
-            )
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
+            .clideAnimation(ClideTheme.Motion.pop, value: isSpotlighted)
+            .clideAnimation(ClideTheme.Motion.hover, value: isHovering)
 
             if isSpotlighted {
                 Text("Shortcut, models and privacy live here")
@@ -119,7 +119,7 @@ private struct SettingsButton: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: isSpotlighted)
+        .clideAnimation(.easeOut(duration: 0.25), value: isSpotlighted)
     }
 }
 
@@ -137,8 +137,11 @@ private struct ReadinessCard: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Ready to dictate")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                HStack(spacing: 6) {
+                    ClideRecDot()
+                    Text("Ready to dictate")
+                        .font(.clideHeadline)
+                }
                 Text(model.displayName)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -148,9 +151,7 @@ private struct ReadinessCard: View {
 
             Spacer(minLength: 0)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clideCard(padding: 18)
     }
 }
 
@@ -162,12 +163,23 @@ private struct TodaySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader("Today")
+            ClideSectionHeader("Today")
 
             if !isEnabled {
-                CardText("Statistics are off. Turn them on in Settings to see your dictation totals here.")
+                ClideEmptyState(
+                    symbol: "chart.bar",
+                    title: "Statistics are off",
+                    message: "Turn them on in Settings to see your dictation totals here.",
+                    tone: .neutral
+                )
+                .clideCard(padding: 0)
             } else if summary.dictationCount == 0 {
-                CardText("Nothing yet today. Press ⌥ . in any text field to start.")
+                ClideEmptyState(
+                    symbol: "waveform",
+                    title: "Nothing yet today",
+                    message: "Press ⌥ . in any text field to start."
+                )
+                .clideCard(padding: 0)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     if let saved = summary.timeSaved {
@@ -175,10 +187,8 @@ private struct TodaySection: View {
                     }
                     SupportingStats(summary: summary)
                 }
-                .animation(.snappy(duration: 0.3), value: summary.wordCount)
-                .padding(18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clideAnimation(.snappy(duration: 0.3), value: summary.wordCount)
+                .clideCard(padding: 18)
             }
         }
     }
@@ -190,7 +200,8 @@ private struct TimeSavedHeadline: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("~\(TimeSavedCalculator.friendlyDescription(ofSaved: saved))")
-                .font(.system(size: 32, weight: .semibold, design: .rounded))
+                .font(.clideDisplay(32))
+                .foregroundStyle(ClideTheme.ink)
                 .monospacedDigit()
                 .contentTransition(.numericText())
             Text("saved by speaking instead of typing")
@@ -219,12 +230,11 @@ private struct SupportingStats: View {
             dot
             statText("\(minutesSpoken) min spoken")
             dot
-            Label(
-                summary.localPercentage == 100 ? "all local" : "\(summary.localPercentage)% local",
-                systemImage: summary.localPercentage == 100 ? "lock.fill" : "lock.open"
+            ClideBadge(
+                text: summary.localPercentage == 100 ? "All local" : "\(summary.localPercentage)% local",
+                symbol: summary.localPercentage == 100 ? "lock.fill" : "lock.open",
+                tone: summary.localPercentage == 100 ? .positive : .neutral
             )
-            .font(.caption)
-            .foregroundStyle(summary.localPercentage == 100 ? .green : .secondary)
         }
     }
 
@@ -260,25 +270,21 @@ private struct ModelsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                SectionHeader("Your models")
+                ClideSectionHeader("Your models")
                 Spacer()
                 Button("Browse all") { isShowingBrowser = true }
-                    .buttonStyle(.link)
+                    .buttonStyle(.clideQuiet)
                     .font(.caption)
             }
 
-            VStack(spacing: 0) {
-                ForEach(Array(relevantModels.enumerated()), id: \.element.id) { index, model in
-                    if index > 0 { Divider().padding(.leading, 14) }
-                    ModelRow(
-                        model: model,
-                        isActive: model.id == modelManager.activeModelID,
-                        isInstalled: modelManager.isInstalled(model),
-                        activate: { modelManager.setActiveModel(model.id) }
-                    )
-                }
+            ClideRowGroup(items: relevantModels, dividerInset: 14) { model in
+                ModelRow(
+                    model: model,
+                    isActive: model.id == modelManager.activeModelID,
+                    isInstalled: modelManager.isInstalled(model),
+                    activate: { modelManager.setActiveModel(model.id) }
+                )
             }
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 }
@@ -295,7 +301,7 @@ private struct ModelRow: View {
         Button(action: activate) {
             HStack(spacing: 11) {
                 Circle()
-                    .fill(isActive ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .fill(isActive ? ClideTheme.accent : Color.secondary.opacity(0.25))
                     .frame(width: 7, height: 7)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -316,9 +322,7 @@ private struct ModelRow: View {
                 Spacer(minLength: 8)
 
                 if isActive {
-                    Text("Active")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.accentColor)
+                    ClideBadge(text: "Active", symbol: "checkmark", tone: .accent)
                 } else {
                     HardwareFitBadge(model: model, showsSummary: false)
                         .opacity(isHovering ? 1 : 0.55)
@@ -329,8 +333,9 @@ private struct ModelRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(isHovering && !isActive ? Color.primary.opacity(0.04) : .clear)
+        .background(isHovering && !isActive ? ClideTheme.surfaceHover : .clear)
         .onHover { isHovering = $0 }
+        .clideAnimation(ClideTheme.Motion.hover, value: isHovering)
         .accessibilityLabel("\(model.displayName)\(isActive ? ", active" : "")")
         .accessibilityHint(isActive ? "" : "Activate this model")
     }
@@ -343,15 +348,20 @@ private struct RecentActivitySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader("Recent")
+            ClideSectionHeader("Recent")
 
-            VStack(spacing: 0) {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { Divider().padding(.leading, 14) }
+            if entries.isEmpty {
+                ClideEmptyState(
+                    symbol: "clock",
+                    title: "Nothing recorded yet",
+                    message: "Your recent transcripts will show up here after you dictate."
+                )
+                .clideCard(padding: 0)
+            } else {
+                ClideRowGroup(items: entries, dividerInset: 14) { entry in
                     RecentActivityRow(entry: entry)
                 }
             }
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 }
@@ -383,19 +393,16 @@ private struct RecentActivityRow: View {
 
             Spacer(minLength: 4)
 
-            Button {
+            ClideIconButton(
+                symbol: didCopy ? "checkmark" : "doc.on.doc",
+                help: "Copy transcript",
+                tint: didCopy ? ClideTheme.positive : nil
+            ) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(entry.text, forType: .string)
                 didCopy = true
-            } label: {
-                Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 11))
-                    .contentTransition(.symbolEffect(.replace))
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(didCopy ? .green : .secondary)
             .opacity(isHovering || didCopy ? 1 : 0)
-            .help("Copy transcript")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -404,36 +411,7 @@ private struct RecentActivityRow: View {
             isHovering = hovering
             if !hovering { didCopy = false }
         }
-    }
-}
-
-// MARK: - Shared bits
-
-private struct SectionHeader: View {
-    let title: String
-    init(_ title: String) { self.title = title }
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .kerning(0.4)
-    }
-}
-
-private struct CardText: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clideAnimation(ClideTheme.Motion.hover, value: isHovering)
     }
 }
 

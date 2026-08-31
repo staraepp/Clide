@@ -4,17 +4,31 @@ struct OnboardingView: View {
     @ObservedObject var state: OnboardingState
     let onFinish: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 0) {
             stepContent
+                .id(state.step)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(32)
+                .transition(stepTransition)
 
             ProgressDots(step: state.step)
-                .padding(.bottom, 20)
+                .padding(.bottom, 22)
         }
-        .frame(width: 520, height: 460)
-        .background(.background)
+        .frame(width: 540, height: 480)
+        .clideCanvas()
+        .clideAnimation(ClideTheme.Motion.gentle, value: state.step)
+    }
+
+    private var stepTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .asymmetric(
+                insertion: .opacity.combined(with: .offset(x: 14)),
+                removal: .opacity.combined(with: .offset(x: -14))
+            )
     }
 
     @ViewBuilder
@@ -53,6 +67,7 @@ private struct WelcomeStep: View {
         ) {
             Button("Get Started", action: next)
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.clidePrimary)
                 .controlSize(.large)
         }
     }
@@ -73,14 +88,16 @@ private struct MicrophoneStep: View {
             case .notDetermined:
                 Button("Allow Microphone Access") { state.requestMicrophone() }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.clidePrimary)
                     .controlSize(.large)
             case .denied:
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Text("Microphone access was denied. Turn it on in System Settings → Privacy & Security → Microphone.")
                         .font(.callout)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ClideTheme.caution)
                         .multilineTextAlignment(.center)
                     Button("Skip for now", action: state.advance)
+                        .buttonStyle(.clideQuiet)
                 }
             }
         }
@@ -105,6 +122,7 @@ private struct AccessibilityStep: View {
                         state.openAccessibilitySettings()
                     }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.clidePrimary)
                     .controlSize(.large)
 
                     Text("Turn on Clide in the list. This screen updates on its own.")
@@ -112,7 +130,7 @@ private struct AccessibilityStep: View {
                         .foregroundStyle(.secondary)
 
                     Button("Skip for now", action: state.advance)
-                        .buttonStyle(.link)
+                        .buttonStyle(.clideQuiet)
                 }
             }
         }
@@ -129,7 +147,7 @@ private struct ModelStep: View {
             symbol: "cube"
         ) {
             if state.isPreparingModel {
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
                     ProgressView()
                     Text(state.discoveredModels.isEmpty
                          ? "Downloading about \(state.activeModel.formattedDownloadSize) the first time…"
@@ -143,16 +161,17 @@ private struct ModelStep: View {
                             systemImage: "checkmark.circle"
                         )
                         .font(.caption)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(ClideTheme.positive)
                     }
                 }
             } else if let error = state.modelError {
                 VStack(spacing: 10) {
                     Text(error)
                         .font(.callout)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(ClideTheme.caution)
                         .multilineTextAlignment(.center)
                     Button("Try Again") { state.goTo(.model) }
+                        .buttonStyle(.clideSecondary)
                 }
             } else {
                 GrantedRow(text: "\(state.activeModel.displayName) is ready", next: state.advance)
@@ -171,11 +190,13 @@ private struct TryItStep: View {
             message: "Press the shortcut and say any sentence. Press it again when you're done.",
             symbol: nil
         ) {
-            VStack(spacing: 18) {
+            VStack(spacing: 20) {
                 HStack(spacing: 10) {
-                    KeycapView(label: "⌥", isPressed: monitor.isOptionDown, size: 52)
-                    Text("+").foregroundStyle(.secondary)
-                    KeycapView(label: ".", isPressed: monitor.isPeriodDown, size: 52)
+                    KeycapView(label: "⌥", isPressed: monitor.isOptionDown, size: 56)
+                    Text("+")
+                        .font(.clideDisplay(18, weight: .regular))
+                        .foregroundStyle(.secondary)
+                    KeycapView(label: ".", isPressed: monitor.isPeriodDown, size: 56)
                 }
 
                 Text("Watch for the Clide pill at the top of your screen.")
@@ -190,6 +211,7 @@ private struct TryItStep: View {
 
 private struct ResultStep: View {
     @ObservedObject var state: OnboardingState
+    @State private var didAppear = false
 
     var body: some View {
         StepLayout(
@@ -202,25 +224,34 @@ private struct ResultStep: View {
                     Text("“\(transcript)”")
                         .font(.system(size: 15, design: .rounded))
                         .multilineTextAlignment(.center)
-                        .padding(14)
+                        .clideCard(padding: 14)
                         .frame(maxWidth: .infinity)
-                        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
                 if let saved = state.timeSaved {
                     VStack(spacing: 3) {
                         Text("You just saved about \(TimeSavedCalculator.friendlyDescription(ofSaved: saved)) by speaking ✨")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.clideDisplay(14, weight: .medium))
                         Text(TimeSavedCalculator.methodologyDisclaimer)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                    }
+                    .clideMotion { content in
+                        content
+                            .scaleEffect(didAppear ? 1 : 0.9)
+                            .opacity(didAppear ? 1 : 0)
+                    }
+                    .onAppear {
+                        withAnimation(ClideTheme.Motion.pop.delay(0.15)) { didAppear = true }
                     }
                 }
 
                 HStack(spacing: 10) {
                     Button("Try Again") { state.retryDictation() }
+                        .buttonStyle(.clideSecondary)
                     Button("Continue", action: state.advance)
                         .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.clidePrimary)
                         .controlSize(.large)
                 }
             }
@@ -261,10 +292,12 @@ private struct PreferencesStep: View {
 
                 Button("Continue", action: next)
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.clidePrimary)
                     .controlSize(.large)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 4)
             }
+            .frame(maxWidth: 340)
         }
     }
 }
@@ -275,12 +308,15 @@ private struct PreferencePicker: View {
     @Binding var selection: FormattingMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 12.5, weight: .medium))
             Picker(title, selection: $selection) {
                 ForEach(FormattingMode.allCases) { mode in
                     Text(mode.displayName).tag(mode)
                 }
             }
+            .labelsHidden()
             .pickerStyle(.segmented)
 
             Text(detail)
@@ -292,6 +328,7 @@ private struct PreferencePicker: View {
 
 private struct DoneStep: View {
     let finish: () -> Void
+    @State private var didAppear = false
 
     var body: some View {
         StepLayout(
@@ -301,7 +338,16 @@ private struct DoneStep: View {
         ) {
             Button("Open Clide", action: finish)
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.clidePrimary)
                 .controlSize(.large)
+        }
+        .clideMotion { content in
+            content
+                .scaleEffect(didAppear ? 1 : 0.92)
+                .opacity(didAppear ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(ClideTheme.Motion.pop) { didAppear = true }
         }
     }
 }
@@ -321,12 +367,13 @@ private struct StepLayout<Actions: View>: View {
             if let symbol {
                 Image(systemName: symbol)
                     .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(ClideTheme.accent)
                     .padding(.bottom, 4)
             }
 
             Text(title)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(.clideDisplay(22))
+                .foregroundStyle(ClideTheme.ink)
                 .multilineTextAlignment(.center)
 
             if let message {
@@ -352,10 +399,11 @@ private struct GrantedRow: View {
     var body: some View {
         VStack(spacing: 12) {
             Label(text, systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(ClideTheme.positive)
                 .font(.callout)
             Button("Continue", action: next)
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.clidePrimary)
                 .controlSize(.large)
         }
     }
@@ -367,9 +415,10 @@ private struct ProgressDots: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(OnboardingState.Step.allCases, id: \.rawValue) { candidate in
-                Circle()
-                    .fill(candidate.rawValue <= step.rawValue ? Color.accentColor : Color.secondary.opacity(0.25))
-                    .frame(width: 5, height: 5)
+                Capsule()
+                    .fill(candidate.rawValue <= step.rawValue ? ClideTheme.accent : Color.secondary.opacity(0.22))
+                    .frame(width: candidate == step ? 16 : 5, height: 5)
+                    .clideAnimation(ClideTheme.Motion.snap, value: step)
             }
         }
         .accessibilityLabel("Step \(step.rawValue + 1) of \(OnboardingState.Step.allCases.count)")
