@@ -105,7 +105,7 @@ private struct SettingsButton: View {
                     )
                     .clideMotion { icon in icon.scaleEffect(isSpotlighted ? 1.12 : (isHovering ? 1.05 : 1)) }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.clideRow)
             .help("Settings")
             .onHover { isHovering = $0 }
             .clideAnimation(ClideTheme.Motion.pop, value: isSpotlighted)
@@ -350,7 +350,7 @@ private struct ModelRow: View {
             .padding(.vertical, 11)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.clideRow)
         .background(isHovering && !isActive ? ClideTheme.surfaceHover : .clear)
         .onHover { isHovering = $0 }
         .clideAnimation(ClideTheme.Motion.hover, value: isHovering)

@@ -134,3 +134,40 @@ struct ClideRowGroup<Item: Identifiable, Row: View>: View {
         .clideCard(padding: 0)
     }
 }
+
+/// A ring that expands outward and fades once, the moment `trigger` flips to
+/// `true` — the small satisfying "burst" for a genuine milestone (a download
+/// finishing, text landing in the field), not decoration for its own sake.
+/// Under Reduce Motion it's skipped entirely; the state change still reads
+/// fine from the checkmark/label it's layered behind.
+struct ClideSuccessPulse: ViewModifier {
+    let trigger: Bool
+    var tint: Color = ClideTheme.positive
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isExpanded = false
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                if !reduceMotion {
+                    Circle()
+                        .stroke(tint, lineWidth: 1.5)
+                        .scaleEffect(isExpanded ? 2.2 : 0.6)
+                        .opacity(isExpanded ? 0 : 0.6)
+                }
+            }
+            .onChange(of: trigger) { _, newValue in
+                guard newValue, !reduceMotion else { return }
+                isExpanded = false
+                withAnimation(.easeOut(duration: 0.55)) { isExpanded = true }
+            }
+    }
+}
+
+extension View {
+    /// Fires a one-shot expanding ring whenever `trigger` becomes `true`.
+    func clideSuccessPulse(_ trigger: Bool, tint: Color = ClideTheme.positive) -> some View {
+        modifier(ClideSuccessPulse(trigger: trigger, tint: tint))
+    }
+}

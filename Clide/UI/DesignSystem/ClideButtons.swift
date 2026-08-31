@@ -86,6 +86,26 @@ extension ButtonStyle where Self == ClideButtonStyle {
     static var clideQuiet: ClideButtonStyle { ClideButtonStyle(kind: .quiet) }
 }
 
+/// Press feedback for a button that draws its own entire appearance — a list
+/// row, a filter pill, a card — where `.buttonStyle(.plain)` was leaving taps
+/// completely silent. Touches nothing about how the label looks; it only adds
+/// the compress-and-release every tappable thing in the app was missing.
+/// Apple Music is the reference point: everything answers a tap immediately,
+/// even things that already respond to hover.
+struct ClideRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .clideMotion { label in
+                label.scaleEffect(configuration.isPressed ? 0.97 : 1)
+            }
+            .clideAnimation(ClideTheme.Motion.snap, value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == ClideRowButtonStyle {
+    static var clideRow: ClideRowButtonStyle { ClideRowButtonStyle() }
+}
+
 /// A borderless icon button — the toolbar vocabulary Clide uses for copy,
 /// delete and settings. Grows a soft backing plate when pointed at, so it
 /// stops being invisible the moment it becomes clickable.
@@ -108,7 +128,7 @@ struct ClideIconButton: View {
                 )
                 .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.clideRow)
         .help(help)
         .accessibilityLabel(help)
         .onHover { isHovering = $0 }

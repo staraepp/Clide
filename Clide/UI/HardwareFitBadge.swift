@@ -25,7 +25,7 @@ struct HardwareFitBadge: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.clideRow)
         .onHover { isHovering = $0 }
         .help("Why this rating?")
         .accessibilityLabel("\(fit.stars) out of 5 stars. \(fit.summary). Click to find out why.")

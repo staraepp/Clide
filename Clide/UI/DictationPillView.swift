@@ -124,6 +124,7 @@ private struct PillSymbol: View {
             .foregroundStyle(state.tone == .neutral ? .white : tint)
             .modifier(SymbolMotion(state: state, reduceMotion: reduceMotion))
             .contentTransition(.symbolEffect(.replace))
+            .clideSuccessPulse(state == .inserted, tint: ClideTheme.positive)
     }
 }
 
@@ -189,7 +190,7 @@ private struct PillButton: View {
                 )
                 .clideMotion { label in label.scaleEffect(isHovering ? 1.04 : 1) }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.clideRow)
         .clideAnimation(ClideTheme.Motion.hover, value: isHovering)
         .onHover { isHovering = $0 }
     }

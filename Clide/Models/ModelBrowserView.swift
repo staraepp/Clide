@@ -199,7 +199,7 @@ private struct LayoutSwitch: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.clideRow)
         .clideAnimation(ClideTheme.Motion.snap, value: isSelected)
     }
 }
@@ -241,7 +241,7 @@ private struct FilterPill: View {
                     Capsule().strokeBorder(isSelected ? .clear : ClideTheme.hairline, lineWidth: 1)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.clideRow)
         .onHover { isHovering = $0 }
         .clideAnimation(ClideTheme.Motion.snap, value: isSelected)
         .clideAnimation(ClideTheme.Motion.hover, value: isHovering)
@@ -312,7 +312,7 @@ private struct RecommendedCard: View {
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.clideRow)
         .clideCard(padding: 0, radius: ClideTheme.Radius.inner, isHighlighted: isActive, isHovering: isHovering, liftsOnHover: true)
         .onHover { isHovering = $0 }
     }

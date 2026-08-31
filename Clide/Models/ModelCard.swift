@@ -111,6 +111,7 @@ struct ModelCard: View {
                 Label("Ready", systemImage: "checkmark.circle.fill")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(ClideTheme.positive)
+                    .clideSuccessPulse(justFinishedInstalling)
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
             } else if isActive {
                 Label("In use", systemImage: "checkmark.circle.fill")
