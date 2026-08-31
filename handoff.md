@@ -2,19 +2,20 @@
 
 Written by the agent that bootstrapped the project (2026-08-30). Read this before touching code — it'll save you from re-deriving decisions already made and re-researching API details already verified.
 
-## ⚠️ Read this first: the Accessibility permission trap
+## ⚠️ Read this first: the permission-nagging trap
 
-**Symptom:** the macOS Accessibility dialog keeps reappearing even though Clide is already ticked in System Settings → Privacy & Security → Accessibility.
+**Symptom:** the macOS Accessibility and/or Microphone dialogs keep reappearing on every launch, even though Clide is already enabled in System Settings.
 
-**Cause:** development builds are ad-hoc signed (`CODE_SIGN_IDENTITY: "-"`), so **the signature changes on every rebuild**. macOS keys the TCC grant to the signature, so a rebuilt Clide is a *different* app as far as TCC is concerned. System Settings still shows an enabled "Clide" entry, but it belongs to the previous binary, and `AXIsProcessTrusted()` returns false.
+**Cause:** development builds are ad-hoc signed (`CODE_SIGN_IDENTITY: "-"`), so **the signature changes on every rebuild**. macOS keys TCC grants to the signature, so a rebuilt Clide is a *different app* as far as TCC is concerned: Accessibility reads as untrusted and microphone reverts to "not determined" — while System Settings still shows an enabled "Clide" entry belonging to the previous binary.
 
-**To actually re-grant after a rebuild:** remove Clide from the Accessibility list (select it, press −), then add the rebuilt `.app` again. Toggling the checkbox off/on is usually not enough. This disappears once real Developer ID signing exists (spec's 0.8 milestone).
+**To actually re-grant after a rebuild:** remove Clide from the Privacy & Security list (select it, press −), then add the rebuilt `.app` again. Toggling the checkbox off/on is usually not enough. All of this disappears once real Developer ID signing exists (spec's 0.8 milestone).
 
-**What this means for code — don't regress this:** `AXIsProcessTrustedWithOptions(prompt: true)` shows the system dialog *every single time it is called* while untrusted. Calling it at launch, on a timer, or on each dictation attempt produces exactly the nagging loop above. So:
+**What this means for code — don't regress this:**
 
-- `PermissionsManager.accessibilityStatus()` / `AXIsProcessTrusted()` — **checking, never prompts.** Use freely, including in polls.
-- `PermissionsManager.promptForAccessibilityAccess()` — **shows the dialog.** Only ever call it in direct response to a user action. It is currently called from exactly two places: the onboarding Accessibility step's button, and once per launch on the first dictation attempt (guarded by `hasPromptedForAccessibility`).
-- Nothing prompts at app launch. Deliberate — don't add it back.
+- `AXIsProcessTrustedWithOptions(prompt: true)` shows its dialog *every single time it's called* while untrusted. `AVCaptureDevice.requestAccess` shows its dialog whenever status is `.notDetermined`. Calling either at launch or on a timer produces the nagging loop.
+- `PermissionsManager.accessibilityStatus()` / `microphoneStatus()` — **checking, never prompts.** Safe to poll.
+- `promptForAccessibilityAccess()` / `requestMicrophoneAccess()` — **these show dialogs.** Only call in direct response to a user action.
+- **Nothing prompts at app launch. Deliberate — don't add it back.** Permissions are requested only from the onboarding steps and from a dictation attempt (Accessibility additionally guarded to once per launch by `hasPromptedForAccessibility`).
 
 Also note **Accessibility is not required to dictate.** Without it Clide still transcribes and leaves the text on the clipboard (`InsertionOutcome.copiedNeedsAccessibility`). Both the AX insertion path *and* the clipboard fallback's synthetic ⌘V need the permission, which is why `TextInsertionService.insert` checks `AXIsProcessTrusted()` up front and copies without pasting when untrusted.
 

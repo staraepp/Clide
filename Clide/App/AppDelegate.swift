@@ -13,10 +13,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictationCoordinator = coordinator
 
         if OnboardingState.hasCompleted {
-            requestPermissionsIfNeeded()
-            // Clide has no Dock icon, so without this, launching it looks like
-            // nothing happened. Once launch-at-login is common this should skip
-            // login launches.
+            // No permission prompts here on purpose — see requestPermissions
+            // note below. Clide has no Dock icon, so without showing something
+            // launching it looks like nothing happened. Once launch-at-login is
+            // common this should skip login launches.
             dashboardWindowController.show()
         } else {
             // Onboarding asks for each permission in context, so don't fire the
@@ -66,15 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
-    /// Deliberately does not prompt for Accessibility. macOS re-shows that
-    /// dialog every time it's requested while untrusted, so prompting at
-    /// launch nags on every start — and a rebuilt development build is
-    /// untrusted even when System Settings still lists Clide as enabled.
-    /// Accessibility is asked for in onboarding, and Clide degrades to
-    /// clipboard-only without it.
-    private func requestPermissionsIfNeeded() {
-        if PermissionsManager.microphoneStatus() == .notDetermined {
-            Task { await PermissionsManager.requestMicrophoneAccess() }
-        }
-    }
+    // Clide deliberately asks for no permissions at launch.
+    //
+    // Both prompts nag on every start otherwise: development builds are
+    // ad-hoc signed, so each rebuild is a new app to TCC — microphone access
+    // reverts to "not determined" and Accessibility to untrusted, even though
+    // System Settings still lists Clide. Prompting at launch then fires the
+    // dialogs again every single time.
+    //
+    // Permissions are requested where the user has just asked for something
+    // that needs them: the onboarding steps, and the first dictation attempt.
 }
