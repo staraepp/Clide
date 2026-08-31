@@ -25,7 +25,6 @@ final class DictationCoordinator {
     private var hideTask: Task<Void, Never>?
     private var choiceTimeoutTask: Task<Void, Never>?
     private var escapeMonitor: Any?
-    private var hasPromptedForAccessibility = false
 
     /// How long the pill waits for a cleanup decision before inserting as-is.
     private static let choiceTimeout: TimeInterval = 8
@@ -56,16 +55,11 @@ final class DictationCoordinator {
             Task { await requestMicrophoneThenRetry() }
             return
         }
-        // Accessibility is not required to dictate — without it Clide still
-        // transcribes and leaves the text on the clipboard. Prompt at most
-        // once per launch, since macOS re-shows the dialog on every request.
-        if transcriptHandler == nil,
-           PermissionsManager.accessibilityStatus() != .granted,
-           !hasPromptedForAccessibility {
-            hasPromptedForAccessibility = true
-            PermissionsManager.promptForAccessibilityAccess()
-        }
-
+        // Dictation never prompts for Accessibility. It isn't required — Clide
+        // transcribes and leaves the text on the clipboard without it — and
+        // because ad-hoc signed builds go untrusted on every rebuild, prompting
+        // here fires the dialog on every fresh launch. The pill says what's
+        // missing; Settings and onboarding are where it's granted.
         do {
             try audioCapture.startRecording { [weak self] amplitude in
                 Task { @MainActor in self?.pillWindow.updateAmplitude(amplitude) }
