@@ -37,7 +37,7 @@ struct DashboardView: View {
             .padding(.top, 14)
         }
         .frame(minWidth: 460, minHeight: 420)
-        .clideAmbientCanvas()
+        .clideFluidCanvas()
         .onAppear {
             shortcutMonitor.start()
             runSettingsSpotlightIfNeeded()

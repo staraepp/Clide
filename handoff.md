@@ -2,6 +2,25 @@
 
 Written by the agent that bootstrapped the project (2026-08-30). Read this before touching code — it'll save you from re-deriving decisions already made and re-researching API details already verified.
 
+## ⚠️ Read this first: mid-flight state as of 2026-08-31 (ended on low usage)
+
+The session that added the fluid shader below ended abruptly on low usage budget, mid-verification. Status:
+
+- **Code compiles and all 78 tests pass.** Confirmed via `xcodebuild ... build` and `xcodebuild ... test` right before the session ended.
+- **The shader has never been visually confirmed live.** The screenshot meant to verify it was interrupted by the user (unrelated to the shader itself — they cut the session short for usage reasons) before it could be inspected. Treat `ClideFluidField` as "compiles and should be correct" — the noise math and colours were ported carefully from the real site source (see the section below) — but not as visually verified. **Look at it before building further on top of it.**
+- **Uncommitted work exists.** At minimum: `Clide/UI/DesignSystem/ClideFluidField.swift`, `Clide/UI/Shaders/FluidField.metal`, the deletion of `Clide/UI/DesignSystem/ClideAmbientBackground.swift` (superseded — see below), and the two call-site changes in `DashboardView.swift`/`OnboardingView.swift`. Run `git status` before doing anything else; this may have been committed after this note was written, or may still be sitting there.
+- **The user's ask that prompted this was bigger than what got done.** They asked for (their words) "text animations," a recreation of the website's shader, "frosted or liquid glass," and "pills." Only the shader recreation was completed. Text animations, glass materials, and pushing buttons toward true pill/capsule shapes are **not started** — see "What's next" below.
+- **System appearance was switched to Light mode** by this session (at the user's request, to check the design system's light-mode rendering) and left that way. If you're confused why the Mac isn't in Dark mode, that's why — it wasn't reverted.
+- **The Metal Toolchain component had to be downloaded** (`xcodebuild -downloadComponent MetalToolchain`, ~688MB) to compile the new `.metal` file on this machine — it wasn't installed by default even with a full Xcode install. If a build fails with `cannot execute tool 'metal' due to missing Metal Toolchain`, that's the fix. Worth checking whether CI/other dev machines will need the same step.
+
+### The fluid shader, and what it actually is
+
+`Clide/UI/Shaders/FluidField.metal` + `Clide/UI/DesignSystem/ClideFluidField.swift` replace the earlier `ClideAmbientBackground` (three blurred `Canvas`-drawn blobs) with a **real port of clide.dev's own WebGL hero shader**, not an invented lookalike. The site's shader source was fetched directly (`curl http://localhost:3000/site.js`) and its `FLUID_FRAG` fragment shader — Ashima Arts' 3D simplex noise, a domain-warped `fluidNoise`/`curlish` field, a five-stop colour mix, a static light glow, vignette, and grain — was translated from GLSL ES 3.00 to Metal Shading Language essentially line-for-line. `FluidField.metal`'s header comment explains exactly what was kept and what was deliberately dropped (the two-pass GPU flow-map simulation that lets the site's version distort around the mouse cursor — wiring live pointer position into a SwiftUI `.colorEffect` risked fighting hit-testing for real buttons, not a tradeoff worth making for a decorative background).
+
+Wired in via SwiftUI's native `Shader`/`ShaderLibrary`/`.colorEffect(_:)` API — available at exactly this project's deployment target (macOS 14/iOS 17), no availability gating needed. Driven by `TimelineView(.animation(paused: reduceMotion))`, so it freezes completely under Reduce Motion rather than just slowing down, same pattern as everything else in the design system. Applied via `.clideFluidCanvas()` to Dashboard and Onboarding only (same reasoning as the blob version it replaced: those are the two screens meant to feel alive to sit in front of; Settings/model browser/dev console stay on plain `.clideCanvas()` since atmosphere behind dense text fights readability). Dark mode gets a separate, darker set of the same five colour stops (`ClideFluidField.Palette`) since the real site has no dark variant to source those from — those are this session's own invention, not pulled from anywhere, so they're the part most worth double-checking once you can actually see it.
+
+If the shader turns out to look wrong when someone finally looks at it: the most likely failure points, in order of suspicion, are (1) the `Shader.Argument` calls (`.float2(CGSize)`, `.color(Color)` mapped to `half4` MSL params) — these compiled clean, which is a good sign the types line up, but a compiling shader can still be *wrong* if an argument landed in the wrong slot; (2) the dark-mode colour choices, which are invented, not sourced; (3) the dropped mouse-interactivity possibly having been more visually load-bearing than assumed — if the field looks static/flat despite the TimelineView driving it, check that `time` is actually reaching the shader and animating (the noise field's own drift should be visible over several seconds even with zero mouse interaction, per the site's own non-interactive/touch-device fallback path, which this mirrors).
+
 ## ⚠️ Read this first: the permission-nagging trap
 
 **Symptom:** the macOS Accessibility and/or Microphone dialogs keep reappearing on every launch, even though Clide is already enabled in System Settings.
@@ -237,14 +256,19 @@ Went and checked the actual SDK headers / library source rather than trusting tr
 
 The items this list used to name as unbuilt (Deepgram/AssemblyAI, mic selection, push-to-talk, transcript history, the AI formatter) are **done** — see "What exists right now" above; this section had gone stale. What's actually still open, roughly in order:
 
-1. **Get the PENDING USER VALIDATION list above actually confirmed by a human.** Nothing involving a live microphone, a real API key, or Apple Intelligence output has been run end-to-end by a person yet. Everything else is less important than knowing the sacred path works.
-2. **Model download progress** — `ModelManager.prepare()` and both local engines' `prepare()` still show an indeterminate spinner rather than a percentage; neither WhisperKit's nor FluidAudio's download call surfaces progress through the current `TranscriptionEngine` protocol, even though both libraries expose progress handlers internally.
-3. **Existing-model discovery reuse-in-place** (§15) — `ExistingModelDiscovery` detects compatible models elsewhere on disk but Clide still downloads its own copy rather than referencing them.
-4. **Sleep/wake recovery and mid-recording device disconnect** (§8) — device *enumeration* reacts to changes, but a microphone unplugged mid-dictation isn't recovered from.
-5. **Clide Mini** local fallback formatter (§22) — today AI formatting is Apple Intelligence or nothing; there's no local model to fall back to on older macOS/hardware.
-6. **Signing/notarization** (§41, 0.8 milestone) — also makes the Accessibility-nagging trap at the top of this file go away for good.
+1. **Actually look at the fluid shader** (see the ⚠️ mid-flight section at the top) and fix whatever's wrong with it — it's never been seen rendering.
+2. **Finish the "10000000x cooler" ask that prompted the shader work**, still not started:
+   - **Text animations** — the user specifically wants headline/text motion (word-stagger reveals were the plan, matching the site's own `split-heading` treatment on its hero `<h1>`); nothing built yet.
+   - **Frosted/liquid glass** — the plan was native `.ultraThinMaterial`/`.regularMaterial` on the floating pill and similar surfaces (real, reliable "frosted glass," available at the current deployment target) as the actual deliverable, with genuine macOS 26 Liquid Glass (`.glassEffect()`) mentioned as a possible later upgrade behind `#available(macOS 26, *)` rather than attempted blind in the same pass. Not started.
+   - **Pills** — pushing primary CTA buttons (`ClideButtonStyle.primary`, onboarding's big buttons) toward true `Capsule` shape instead of the current 10pt rounded rect, matching the site's `border-radius:var(--radius-pill)` CTAs. Not started.
+3. **Get the PENDING USER VALIDATION list above actually confirmed by a human.** Nothing involving a live microphone, a real API key, or Apple Intelligence output has been run end-to-end by a person yet.
+4. **Model download progress** — `ModelManager.prepare()` and both local engines' `prepare()` still show an indeterminate spinner rather than a percentage; neither WhisperKit's nor FluidAudio's download call surfaces progress through the current `TranscriptionEngine` protocol, even though both libraries expose progress handlers internally.
+5. **Existing-model discovery reuse-in-place** (§15) — `ExistingModelDiscovery` detects compatible models elsewhere on disk but Clide still downloads its own copy rather than referencing them.
+6. **Sleep/wake recovery and mid-recording device disconnect** (§8) — device *enumeration* reacts to changes, but a microphone unplugged mid-dictation isn't recovered from.
+7. **Clide Mini** local fallback formatter (§22) — today AI formatting is Apple Intelligence or nothing; there's no local model to fall back to on older macOS/hardware.
+8. **Signing/notarization** (§41, 0.8 milestone) — also makes the Accessibility-nagging trap at the top of this file go away for good.
 
-A full UI/animation pass (dashboard, model browser, onboarding, pill, settings, dev console) landed 2026-08-31 — see the design-system ⚠️ section near the top before styling anything new.
+A full UI/animation pass (dashboard, model browser, onboarding, pill, settings, dev console) landed 2026-08-31 — see the design-system ⚠️ section near the top before styling anything new. A follow-up pass the same day added the fluid shader described above, replacing the blob-based `ClideAmbientBackground` that pass introduced (deleted; superseded, don't resurrect it).
 
 ## Git / GitHub
 

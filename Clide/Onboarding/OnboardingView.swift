@@ -18,7 +18,7 @@ struct OnboardingView: View {
                 .padding(.bottom, 22)
         }
         .frame(width: 540, height: 480)
-        .clideAmbientCanvas()
+        .clideFluidCanvas()
         .clideAnimation(ClideTheme.Motion.gentle, value: state.step)
     }
 
