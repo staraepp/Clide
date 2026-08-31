@@ -15,7 +15,8 @@ Written by the agent that bootstrapped the project (2026-08-30). Read this befor
 - `AXIsProcessTrustedWithOptions(prompt: true)` shows its dialog *every single time it's called* while untrusted. `AVCaptureDevice.requestAccess` shows its dialog whenever status is `.notDetermined`. Calling either at launch or on a timer produces the nagging loop.
 - `PermissionsManager.accessibilityStatus()` / `microphoneStatus()` — **checking, never prompts.** Safe to poll.
 - `promptForAccessibilityAccess()` / `requestMicrophoneAccess()` — **these show dialogs.** Only call in direct response to a user action.
-- **Nothing prompts at app launch. Deliberate — don't add it back.** Permissions are requested only from the onboarding steps and from a dictation attempt (Accessibility additionally guarded to once per launch by `hasPromptedForAccessibility`).
+- **Nothing prompts at app launch. Deliberate — don't add it back.**
+- **Dictation never prompts for Accessibility at all.** `promptForAccessibilityAccess()` is reachable from exactly one place: the onboarding step's button. The microphone is requested from onboarding and from a dictation attempt (which is a user action, and `requestAccess` only shows a dialog while status is `.notDetermined`, so it can't loop within a session).
 
 Also note **Accessibility is not required to dictate.** Without it Clide still transcribes and leaves the text on the clipboard (`InsertionOutcome.copiedNeedsAccessibility`). Both the AX insertion path *and* the clipboard fallback's synthetic ⌘V need the permission, which is why `TextInsertionService.insert` checks `AXIsProcessTrusted()` up front and copies without pasting when untrusted.
 
@@ -97,23 +98,33 @@ Audio/
   AudioCaptureService.swift   AVAudioEngine → 16kHz mono Float32, lock-guarded buffer, amplitude callback
   WAVEncoder.swift            16-bit PCM WAV for cloud uploads; local engines take Floats directly
 Transcription/
-  TranscriptionEngine.swift              protocol: transcribe(samples:) + optional prepare()
+  TranscriptionEngine.swift              protocol: transcribe(samples:) + optional prepare(); RecoveryAction
   WhisperKitTranscriptionEngine.swift    actor; in-memory transcribe(audioArrays:), no temp files
   FluidAudioTranscriptionEngine.swift    actor; AsrManager + TdtDecoderState
-  GroqTranscriptionEngine.swift          BYOK, OpenAI-compatible endpoint, + testConnection
+  AppleSpeechTranscriptionEngine.swift   SFSpeechRecognizer, on-device only or it refuses
+  CloudProvider.swift                    the three BYOK services: keys, auth schemes, connection tests
+  CloudRequest.swift                     shared HTTP + status-code → plain-language error mapping
+  GroqTranscriptionEngine.swift          multipart, OpenAI-compatible
+  DeepgramTranscriptionEngine.swift      raw WAV body, Token auth
+  AssemblyAITranscriptionEngine.swift    upload → create → poll
 Models/
-  TranscriptionModelInfo.swift  the catalog + stable model IDs and metadata
-  ModelManager.swift            active selection (persisted) and per-model engine cache
+  TranscriptionModelInfo.swift  the catalog + stable IDs, capabilities, sources
+  ModelManager.swift            selection, engine cache, install state, download
   HardwareProfile.swift         this Mac via sysctl
   HardwareFit.swift             explainable 1-5 rating; carries its reasons, never just a number
+  ExistingModelDiscovery.swift  allowlisted known paths only — never crawls user folders
+  ModelBrowserView / ModelCard / ModelComparisonTable / ModelBrowserSheet
 Formatting/
   TranscriptCleanup.swift       deterministic, always runs
   FillerWordRemover.swift       conservative; deliberately leaves like/so/well/you know alone
   FormattingPreferences.swift   three modes each, default Ask Each Time
+  TranscriptFormatter.swift     protocol; availability + reason, so UI never lies about it
+  AppleFormatter.swift          FoundationModels, #available(macOS 26) gated
   TranscriptPipeline.swift      composes the above; ask-each-time never alters text silently
 Statistics/
   TimeSavedCalculator.swift     40 WPM baseline as a named constant; nil rather than a false claim
   DictationStatistics.swift     local counters only — never transcript text
+  TranscriptHistory.swift       opt-in, off by default; the ONLY place transcripts are kept
 Diagnostics/
   DiagnosticsLog.swift          bounded ring buffer; records what happened, never what was said
   DiagnosticsReport.swift       the ONE place a report is assembled, so the never-include rule is enforceable
