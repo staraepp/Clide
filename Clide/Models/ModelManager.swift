@@ -85,10 +85,9 @@ final class ModelManager: ObservableObject {
         return isInstalled(model)
     }
 
-    /// Scans Clide's models directory for each downloadable model's files.
-    /// Both runtimes lay their downloads out under directories named after the
-    /// model, so a name match is a reliable enough signal without reaching
-    /// into either library's private layout.
+    /// Scans Clide's models directory for each downloadable model's files,
+    /// matching against the directory name each model declares rather than
+    /// guessing from its engine identifier.
     func refreshInstalledModels() {
         let root = ClideStorage.modelsDirectory
         guard let enumerator = FileManager.default.enumerator(
@@ -108,27 +107,29 @@ final class ModelManager: ObservableObject {
 
         installedModelIDs = Set(
             catalog
-                .filter { if case .download = $0.source { return true } else { return false } }
-                .filter { model in
-                    let needle = model.engineIdentifier.lowercased()
-                    return directoryNames.contains { $0 == needle || $0.contains(needle) }
-                }
+                .filter { $0.installDirectoryName != nil }
+                .filter { model in directoryNames.contains { model.owns(directoryNamed: $0) } }
                 .map(\.id)
         )
     }
 
     func deleteDownload(for model: TranscriptionModelInfo) {
-        guard case .download = model.source else { return }
+        guard model.installDirectoryName != nil else { return }
 
-        let root = ClideStorage.modelsDirectory
-        let needle = model.engineIdentifier.lowercased()
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: root,
+        // Deletion must use the precise matcher — a loose one would remove a
+        // sibling model's files (e.g. small.en when deleting small).
+        guard let enumerator = FileManager.default.enumerator(
+            at: ClideStorage.modelsDirectory,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else { return }
 
-        for url in contents where url.lastPathComponent.lowercased().contains(needle) {
+        var doomed: [URL] = []
+        for case let url as URL in enumerator {
+            guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { continue }
+            if model.owns(directoryNamed: url.lastPathComponent) { doomed.append(url) }
+        }
+        for url in doomed {
             try? FileManager.default.removeItem(at: url)
         }
 

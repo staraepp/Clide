@@ -54,9 +54,7 @@ enum ExistingModelDiscovery {
             for directory in subdirectories(of: location.url) {
                 let name = directory.lastPathComponent.lowercased()
                 let match = ModelCatalog.all.first { model in
-                    model.runtime == location.runtime
-                        && (name == model.engineIdentifier.lowercased()
-                            || name.contains(model.engineIdentifier.lowercased()))
+                    model.runtime == location.runtime && model.owns(directoryNamed: name)
                 }
                 guard let match else { continue }
 

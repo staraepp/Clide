@@ -33,6 +33,45 @@ struct ModelCatalogTests {
         }
     }
 
+    /// The bug this guards: deriving the folder from the engine identifier made
+    /// "small" match "openai_whisper-small.en", which both misreported install
+    /// state and would have deleted the wrong model's files.
+    @Test func smallDoesNotClaimSmallEnglishsFolder() throws {
+        let small = try #require(ModelCatalog.model(withID: "whisper.small"))
+        let smallEn = try #require(ModelCatalog.model(withID: "whisper.small.en"))
+
+        #expect(small.owns(directoryNamed: "openai_whisper-small"))
+        #expect(!small.owns(directoryNamed: "openai_whisper-small.en"))
+
+        #expect(smallEn.owns(directoryNamed: "openai_whisper-small.en"))
+        #expect(!smallEn.owns(directoryNamed: "openai_whisper-small"))
+    }
+
+    @Test func folderMatchingIgnoresCaseAndAllowsRuntimeSuffixes() throws {
+        let parakeet = try #require(ModelCatalog.model(withID: "fluid.parakeet-tdt-0.6b-v2"))
+        #expect(parakeet.owns(directoryNamed: "parakeet-tdt-0.6b-v2"))
+        #expect(parakeet.owns(directoryNamed: "Parakeet-TDT-0.6b-v2-coreml"))
+        #expect(!parakeet.owns(directoryNamed: "parakeet-tdt-0.6b-v3-coreml"))
+    }
+
+    @Test func noTwoModelsClaimTheSameFolder() {
+        let names = [
+            "openai_whisper-tiny.en", "openai_whisper-base.en", "openai_whisper-small.en",
+            "openai_whisper-small", "openai_whisper-large-v3_turbo",
+            "parakeet-tdt-0.6b-v2-coreml", "parakeet-tdt-0.6b-v3-coreml",
+        ]
+        for name in names {
+            let owners = ModelCatalog.all.filter { $0.owns(directoryNamed: name) }
+            #expect(owners.count == 1, "\(name) claimed by \(owners.map(\.id))")
+        }
+    }
+
+    @Test func cloudAndSystemModelsOwnNoFolder() {
+        for model in ModelCatalog.all where !model.isLocal || model.runtime == .appleSpeech {
+            #expect(model.installDirectoryName == nil)
+        }
+    }
+
     @Test func downloadableModelsDeclareASize() {
         for model in ModelCatalog.all {
             if case .download = model.source {

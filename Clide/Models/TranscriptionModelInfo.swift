@@ -55,7 +55,12 @@ struct ModelCapabilities: Sendable, Equatable {
 /// state without each runtime's own conventions leaking into the UI.
 enum ModelSource: Sendable, Equatable {
     /// Downloaded into Clide's models directory by its runtime.
-    case download(repository: String)
+    ///
+    /// `directoryName` is the folder each runtime actually creates, stated
+    /// explicitly rather than derived from the engine identifier: deriving it
+    /// makes "small" match "small.en", which both misreports install state and
+    /// would delete the wrong model's files.
+    case download(repository: String, directoryName: String)
     /// Provided and updated by macOS; nothing for Clide to fetch.
     case systemManaged
     /// Runs on the provider's servers.
@@ -89,6 +94,25 @@ struct TranscriptionModelInfo: Identifiable, Sendable, Equatable {
     var isExperimental = false
 
     var isLocal: Bool { runtime.isLocal }
+
+    /// The folder this model occupies on disk, when it's a downloadable one.
+    var installDirectoryName: String? {
+        if case .download(_, let directoryName) = source { return directoryName }
+        return nil
+    }
+
+    /// Whether a directory on disk belongs to this model.
+    ///
+    /// Requires an exact name or a `-`/`_` separated extension of it, so
+    /// "openai_whisper-small" never claims "openai_whisper-small.en".
+    func owns(directoryNamed name: String) -> Bool {
+        guard let expected = installDirectoryName?.lowercased() else { return false }
+        let candidate = name.lowercased()
+        return candidate == expected
+            || candidate.hasPrefix(expected + "-")
+            || candidate.hasPrefix(expected + "_")
+    }
+
     var requiresAPIKey: Bool { runtime.cloudProvider != nil }
     var usesNeuralEngine: Bool { runtime.usesCoreML }
 
@@ -131,7 +155,7 @@ enum ModelCatalog {
             languageSummary: "English",
             isMultilingual: false,
             capabilities: whisperCapabilities,
-            source: .download(repository: whisperRepository),
+            source: .download(repository: whisperRepository, directoryName: "openai_whisper-tiny.en"),
             summary: "The fastest option. Fine for short notes, but it misspells names and technical terms."
         ),
         TranscriptionModelInfo(
@@ -147,7 +171,7 @@ enum ModelCatalog {
             languageSummary: "English",
             isMultilingual: false,
             capabilities: whisperCapabilities,
-            source: .download(repository: whisperRepository),
+            source: .download(repository: whisperRepository, directoryName: "openai_whisper-base.en"),
             summary: "A good starting point: noticeably better than Tiny and still very fast."
         ),
         TranscriptionModelInfo(
@@ -163,7 +187,7 @@ enum ModelCatalog {
             languageSummary: "English",
             isMultilingual: false,
             capabilities: whisperCapabilities,
-            source: .download(repository: whisperRepository),
+            source: .download(repository: whisperRepository, directoryName: "openai_whisper-small.en"),
             summary: "Handles punctuation and unusual words much better. A reasonable everyday choice."
         ),
         TranscriptionModelInfo(
@@ -179,7 +203,7 @@ enum ModelCatalog {
             languageSummary: "99 languages",
             isMultilingual: true,
             capabilities: whisperCapabilities,
-            source: .download(repository: whisperRepository),
+            source: .download(repository: whisperRepository, directoryName: "openai_whisper-small"),
             summary: "The multilingual Small. Pick this over Small (English) only if you dictate in more than one language."
         ),
         TranscriptionModelInfo(
@@ -195,7 +219,7 @@ enum ModelCatalog {
             languageSummary: "99 languages",
             isMultilingual: true,
             capabilities: whisperCapabilities,
-            source: .download(repository: whisperRepository),
+            source: .download(repository: whisperRepository, directoryName: "openai_whisper-large-v3_turbo"),
             summary: "The most accurate local Whisper. Large download, and it wants a roomy Mac."
         ),
     ]
@@ -223,7 +247,7 @@ enum ModelCatalog {
             languageSummary: "English",
             isMultilingual: false,
             capabilities: parakeetCapabilities,
-            source: .download(repository: "FluidInference/parakeet-tdt-0.6b-v2-coreml"),
+            source: .download(repository: "FluidInference/parakeet-tdt-0.6b-v2-coreml", directoryName: "parakeet-tdt-0.6b-v2"),
             summary: "Accurate and very fast on Apple Silicon. The best local option for English if you have the space."
         ),
         TranscriptionModelInfo(
@@ -239,7 +263,7 @@ enum ModelCatalog {
             languageSummary: "25 European languages",
             isMultilingual: true,
             capabilities: parakeetCapabilities,
-            source: .download(repository: "FluidInference/parakeet-tdt-0.6b-v3-coreml"),
+            source: .download(repository: "FluidInference/parakeet-tdt-0.6b-v3-coreml", directoryName: "parakeet-tdt-0.6b-v3"),
             summary: "Same speed as v2 across 25 languages. English is very slightly behind v2 on rare words."
         ),
     ]
