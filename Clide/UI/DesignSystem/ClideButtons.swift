@@ -40,11 +40,11 @@ private struct ClideButtonBody: View {
         configuration.label
             .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(foreground)
-            .padding(.horizontal, kind == .quiet ? 8 : 12)
+            .padding(.horizontal, kind == .primary ? 16 : (kind == .quiet ? 8 : 12))
             .padding(.vertical, 6)
             .frame(maxWidth: isFullWidth ? .infinity : nil)
             .background(background)
-            .contentShape(RoundedRectangle(cornerRadius: ClideTheme.Radius.inner, style: .continuous))
+            .contentShape(contentShape)
             .clideMotion { label in
                 label.scaleEffect(configuration.isPressed ? 0.97 : 1)
             }
@@ -62,20 +62,30 @@ private struct ClideButtonBody: View {
         }
     }
 
+    /// Primary CTAs go full pill — clide.dev's own `--radius-pill` treatment
+    /// for its calls to action. Secondary/quiet stay the softer inner radius;
+    /// a pill on every button would flatten the hierarchy pills exist to add.
+    private var contentShape: AnyShape {
+        kind == .primary
+            ? AnyShape(Capsule(style: .continuous))
+            : AnyShape(RoundedRectangle(cornerRadius: ClideTheme.Radius.inner, style: .continuous))
+    }
+
     @ViewBuilder
     private var background: some View {
-        let shape = RoundedRectangle(cornerRadius: ClideTheme.Radius.inner, style: .continuous)
         switch kind {
         case .primary:
-            shape
+            Capsule(style: .continuous)
                 .fill(configuration.isPressed ? ClideTheme.accentDeep : ClideTheme.accent)
                 .shadow(color: ClideTheme.accent.opacity(isHovering ? 0.35 : 0.2), radius: 5, y: 2)
         case .secondary:
+            let shape = RoundedRectangle(cornerRadius: ClideTheme.Radius.inner, style: .continuous)
             shape
                 .fill(isHovering ? ClideTheme.surfaceHover : ClideTheme.surface)
                 .overlay(shape.strokeBorder(ClideTheme.hairline, lineWidth: 1))
         case .quiet:
-            shape.fill(isHovering ? Color.primary.opacity(0.06) : .clear)
+            RoundedRectangle(cornerRadius: ClideTheme.Radius.inner, style: .continuous)
+                .fill(isHovering ? Color.primary.opacity(0.06) : .clear)
         }
     }
 }
