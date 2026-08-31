@@ -10,6 +10,13 @@ struct ClideCardModifier: ViewModifier {
     var isHighlighted: Bool = false
     /// Pointer feedback: the surface warms and the shadow deepens slightly.
     var isHovering: Bool = false
+    /// Cards that are themselves a clickable target (model cards, the
+    /// recommended strip) rise slightly on hover, on top of the shared
+    /// warm/shadow feedback. Off by default — a list row inside a card
+    /// shouldn't float away from its siblings.
+    var liftsOnHover: Bool = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
@@ -19,6 +26,20 @@ struct ClideCardModifier: ViewModifier {
                     .fill(isHovering ? ClideTheme.surfaceHover : ClideTheme.surface)
             )
             .overlay(
+                // A faint top highlight, the way a real raised surface catches
+                // light — the difference between a flat colour swatch and
+                // something that reads as a physical card.
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.05), .clear],
+                            startPoint: .top,
+                            endPoint: .center
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(
                         isHighlighted ? ClideTheme.accent.opacity(0.55) : ClideTheme.hairline,
@@ -26,10 +47,11 @@ struct ClideCardModifier: ViewModifier {
                     )
             )
             .shadow(
-                color: .black.opacity(isHovering ? 0.09 : 0.05),
-                radius: isHovering ? 9 : 5,
-                y: isHovering ? 3 : 1.5
+                color: .black.opacity(isHovering ? 0.1 : 0.05),
+                radius: isHovering ? 10 : 5,
+                y: isHovering ? 4 : 1.5
             )
+            .offset(y: liftsOnHover && isHovering && !reduceMotion ? -2 : 0)
             .clideAnimation(ClideTheme.Motion.hover, value: isHovering)
             .clideAnimation(ClideTheme.Motion.snap, value: isHighlighted)
     }
@@ -40,14 +62,16 @@ extension View {
         padding: CGFloat = 16,
         radius: CGFloat = ClideTheme.Radius.card,
         isHighlighted: Bool = false,
-        isHovering: Bool = false
+        isHovering: Bool = false,
+        liftsOnHover: Bool = false
     ) -> some View {
         modifier(
             ClideCardModifier(
                 padding: padding,
                 radius: radius,
                 isHighlighted: isHighlighted,
-                isHovering: isHovering
+                isHovering: isHovering,
+                liftsOnHover: liftsOnHover
             )
         )
     }

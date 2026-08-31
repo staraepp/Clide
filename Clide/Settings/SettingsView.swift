@@ -148,9 +148,11 @@ struct SettingsView: View {
                 }
 
                 caption("Off by default. This is the only place Clide keeps what you actually said — turning it off deletes what's stored.")
+            } header: {
+                SectionLabel("Privacy", symbol: "lock.fill")
+            }
 
-                Divider()
-
+            Section {
                 Toggle("Keep local statistics", isOn: $statistics.isEnabled)
 
                 HStack {
@@ -163,7 +165,7 @@ struct SettingsView: View {
 
                 caption("Statistics are counters only — they stay on this Mac and never include what you said.")
             } header: {
-                SectionLabel("Privacy", symbol: "lock.fill")
+                SectionLabel("Statistics", symbol: "chart.bar.fill")
             }
 
             Section {
@@ -201,7 +203,6 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 470)
-        .fixedSize(horizontal: false, vertical: true)
         .clideCanvas()
         .onReceive(statusPoll) { _ in
             accessibilityStatus = PermissionsManager.accessibilityStatus()

@@ -93,8 +93,7 @@ private struct SettingsButton: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
             Button {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                SettingsWindowController.shared.show()
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15))
@@ -125,33 +124,52 @@ private struct SettingsButton: View {
 
 // MARK: - Readiness
 
+/// The one card on the dashboard that isn't a peer of the others — it's the
+/// answer to the question the whole screen exists to answer ("can I dictate
+/// right now?"), so it gets a tinted background and larger keycaps rather
+/// than sharing the flat treatment every list card uses.
 private struct ReadinessCard: View {
     let model: TranscriptionModelInfo
     @ObservedObject var monitor: ShortcutPressMonitor
 
     var body: some View {
-        HStack(alignment: .center, spacing: 18) {
-            HStack(spacing: 7) {
-                KeycapView(label: "⌥", isPressed: monitor.isOptionDown)
-                KeycapView(label: ".", isPressed: monitor.isPeriodDown)
+        HStack(alignment: .center, spacing: 20) {
+            HStack(spacing: 8) {
+                KeycapView(label: "⌥", isPressed: monitor.isOptionDown, size: 42)
+                KeycapView(label: ".", isPressed: monitor.isPeriodDown, size: 42)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     ClideRecDot()
                     Text("Ready to dictate")
-                        .font(.clideHeadline)
+                        .font(.clideDisplay(17, weight: .semibold))
                 }
                 Text(model.displayName)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HardwareFitBadge(model: model)
-                    .padding(.top, 2)
+                    .padding(.top, 3)
             }
 
             Spacer(minLength: 0)
         }
-        .clideCard(padding: 18)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: ClideTheme.Radius.card, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [ClideTheme.accentWash, ClideTheme.surface],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: ClideTheme.Radius.card, style: .continuous)
+                .strokeBorder(ClideTheme.accent.opacity(0.22), lineWidth: 1)
+        )
+        .shadow(color: ClideTheme.accent.opacity(0.12), radius: 16, y: 6)
     }
 }
 

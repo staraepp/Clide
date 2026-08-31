@@ -34,7 +34,7 @@ struct ModelCard: View {
 
             footer
         }
-        .clideCard(isHighlighted: isActive, isHovering: isHovering)
+        .clideCard(isHighlighted: isActive, isHovering: isHovering, liftsOnHover: true)
         .onHover { isHovering = $0 }
         .onChange(of: isInstalled) { _, installed in
             guard installed else { return }
@@ -83,13 +83,18 @@ struct ModelCard: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            Text(model.languageSummary)
-            Text("·").foregroundStyle(.tertiary)
-            Text(model.formattedDownloadSize)
+            HStack(spacing: 8) {
+                Text(model.languageSummary)
+                Text("·").foregroundStyle(.tertiary)
+                Text(model.formattedDownloadSize)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Spacer(minLength: 8)
+
+            actions
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .overlay(alignment: .trailing) { actions }
     }
 
     @ViewBuilder

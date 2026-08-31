@@ -25,6 +25,10 @@ final class DashboardWindowController {
         newWindow.titlebarAppearsTransparent = true
         newWindow.isReleasedWhenClosed = false
         newWindow.minSize = NSSize(width: 460, height: 420)
+        // Clide is a compact summary surface, not an admin dashboard — capped
+        // so dragging the corner can't stretch it into a mostly-empty window.
+        // Content beyond this still scrolls; nothing becomes unreachable.
+        newWindow.maxSize = NSSize(width: 680, height: 820)
         newWindow.contentView = NSHostingView(rootView: DashboardView())
         newWindow.center()
         newWindow.setFrameAutosaveName("ClideDashboard")

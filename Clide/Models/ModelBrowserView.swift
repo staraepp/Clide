@@ -46,7 +46,7 @@ struct ModelBrowserView: View {
                 ModelComparisonTable(models: visibleModels, modelManager: modelManager)
             }
         }
-        .frame(minWidth: 640, minHeight: 480)
+        .frame(minWidth: 680, minHeight: 480)
         .clideCanvas()
         .alert("Couldn't prepare that model", isPresented: errorBinding) {
             Button("OK") { errorMessage = nil }
@@ -313,7 +313,7 @@ private struct RecommendedCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
-        .clideCard(padding: 0, radius: ClideTheme.Radius.inner, isHighlighted: isActive, isHovering: isHovering)
+        .clideCard(padding: 0, radius: ClideTheme.Radius.inner, isHighlighted: isActive, isHovering: isHovering, liftsOnHover: true)
         .onHover { isHovering = $0 }
     }
 }
