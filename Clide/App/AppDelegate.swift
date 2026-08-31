@@ -4,11 +4,24 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var dictationCoordinator: DictationCoordinator?
+    private let dashboardWindowController = DashboardWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpStatusItem()
         dictationCoordinator = DictationCoordinator()
         requestPermissionsIfNeeded()
+
+        // Clide has no Dock icon, so without this, launching it looks like
+        // nothing happened. Once launch-at-login exists this needs to skip
+        // login launches.
+        dashboardWindowController.show()
+    }
+
+    /// Clicking the app in Finder/Spotlight while it's already running should
+    /// bring the dashboard back rather than silently doing nothing.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        dashboardWindowController.show()
+        return true
     }
 
     private func setUpStatusItem() {
@@ -20,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         titleItem.isEnabled = false
         menu.addItem(titleItem)
         menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Open Clide", action: #selector(openDashboard), keyEquivalent: "o"))
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Clide", action: #selector(quit), keyEquivalent: "q"))
@@ -27,6 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         item.menu = menu
         statusItem = item
+    }
+
+    @objc private func openDashboard() {
+        dashboardWindowController.show()
     }
 
     @objc private func openSettings() {
