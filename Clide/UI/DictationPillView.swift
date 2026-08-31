@@ -61,11 +61,23 @@ struct DictationPillView: View {
         .clideAnimation(ClideTheme.Motion.snap, value: state)
     }
 
+    /// Real frosted glass, not a flat fill — the panel behind this view is
+    /// genuinely transparent (`DictationPillWindow` sets `isOpaque = false`),
+    /// so `.ultraThinMaterial` blurs whatever's actually on screen beneath the
+    /// pill, exactly like a native macOS overlay (Now Playing, Control
+    /// Center). Forced to the dark material variant regardless of system
+    /// appearance, since the pill's text and glyphs are always white — a
+    /// light-mode material here would kill that contrast over a bright desktop.
+    /// A soft black tint sits under the material for the same reason: pure
+    /// glass over, say, a white Finder window would still read too pale.
     private var pillBackground: some View {
         Capsule()
-            .fill(.black.opacity(0.85))
+            .fill(.black.opacity(0.32))
+            .background(
+                Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
+            )
             .overlay(
-                Capsule().strokeBorder(edgeColor.opacity(state.tone == .neutral ? 0.08 : 0.6), lineWidth: 1)
+                Capsule().strokeBorder(edgeColor.opacity(state.tone == .neutral ? 0.14 : 0.6), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.28), radius: 12, y: 4)
             .shadow(color: edgeColor.opacity(state.tone == .neutral ? 0 : 0.25), radius: 14, y: 0)
