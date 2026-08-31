@@ -131,9 +131,20 @@ private struct ModelStep: View {
             if state.isPreparingModel {
                 VStack(spacing: 10) {
                     ProgressView()
-                    Text("Downloading about \(state.activeModel.formattedDownloadSize) the first time…")
+                    Text(state.discoveredModels.isEmpty
+                         ? "Downloading about \(state.activeModel.formattedDownloadSize) the first time…"
+                         : "Setting things up…")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    if let found = state.discoveredModels.first {
+                        Label(
+                            "Found a compatible model in \(found.locationDescription)",
+                            systemImage: "checkmark.circle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    }
                 }
             } else if let error = state.modelError {
                 VStack(spacing: 10) {

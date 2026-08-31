@@ -50,6 +50,13 @@ enum PermissionsManager {
         return AXIsProcessTrustedWithOptions(options as CFDictionary)
     }
 
+    static func openMicrophoneSettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+        ) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     static func openAccessibilitySettings() {
         guard let url = URL(
             string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"

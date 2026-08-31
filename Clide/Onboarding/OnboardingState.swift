@@ -30,6 +30,9 @@ final class OnboardingState: ObservableObject {
 
     @Published private(set) var isPreparingModel = false
     @Published private(set) var modelError: String?
+    /// Compatible models already on this Mac, so onboarding can say the
+    /// download isn't needed rather than fetching a duplicate.
+    @Published private(set) var discoveredModels: [DiscoveredModel] = []
 
     @Published private(set) var transcript: String?
     @Published private(set) var speakingDuration: TimeInterval = 0
@@ -68,6 +71,7 @@ final class OnboardingState: ObservableObject {
         case .microphone, .accessibility:
             startPollingPermissions()
         case .model:
+            discoveredModels = ExistingModelDiscovery.discover()
             Task { await prepareModel() }
         case .tryIt:
             beginPracticeDictation()

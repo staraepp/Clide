@@ -8,12 +8,17 @@ struct DashboardView: View {
     @ObservedObject private var history = TranscriptHistory.shared
     @StateObject private var shortcutMonitor = ShortcutPressMonitor()
     @State private var isShowingBrowser = false
+    @State private var isSpotlightingSettings = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Text(Self.greeting)
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                HStack(alignment: .firstTextBaseline) {
+                    Text(Self.greeting)
+                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    Spacer()
+                    SettingsButton(isSpotlighted: isSpotlightingSettings)
+                }
 
                 ReadinessCard(model: modelManager.activeModel, monitor: shortcutMonitor)
                 TodaySection(summary: statistics.todaySummary, isEnabled: statistics.isEnabled)
@@ -30,10 +35,27 @@ struct DashboardView: View {
         }
         .frame(minWidth: 440, minHeight: 400)
         .background(.background)
-        .onAppear { shortcutMonitor.start() }
+        .onAppear {
+            shortcutMonitor.start()
+            runSettingsSpotlightIfNeeded()
+        }
         .onDisappear { shortcutMonitor.stop() }
         .sheet(isPresented: $isShowingBrowser) {
             ModelBrowserSheet(isPresented: $isShowingBrowser)
+        }
+    }
+
+    /// A one-time nudge toward Settings right after onboarding, so people know
+    /// where customisation lives (clide.md §7). Shown once, ever.
+    private func runSettingsSpotlightIfNeeded() {
+        guard SettingsSpotlight.shouldShow else { return }
+        SettingsSpotlight.markShown()
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            isSpotlightingSettings = true
+            try? await Task.sleep(for: .seconds(4))
+            isSpotlightingSettings = false
         }
     }
 
@@ -43,6 +65,61 @@ struct DashboardView: View {
         case 12..<17: return "Good afternoon"
         default: return "Good evening"
         }
+    }
+}
+
+@MainActor
+private enum SettingsSpotlight {
+    private static let key = "Clide.hasSeenSettingsSpotlight"
+
+    static var shouldShow: Bool {
+        OnboardingState.hasCompleted && !UserDefaults.standard.bool(forKey: key)
+    }
+
+    static func markShown() {
+        UserDefaults.standard.set(true, forKey: key)
+    }
+}
+
+private struct SettingsButton: View {
+    let isSpotlighted: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15))
+                    .foregroundStyle(isSpotlighted ? Color.accentColor : .secondary)
+                    .padding(7)
+                    .background(
+                        Circle()
+                            .fill(isSpotlighted ? Color.accentColor.opacity(0.15) : .clear)
+                    )
+                    .scaleEffect(isSpotlighted && !reduceMotion ? 1.12 : (isHovering ? 1.05 : 1))
+            }
+            .buttonStyle(.plain)
+            .help("Settings")
+            .onHover { isHovering = $0 }
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.6),
+                value: isSpotlighted
+            )
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovering)
+
+            if isSpotlighted {
+                Text("Shortcut, models and privacy live here")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: isSpotlighted)
     }
 }
 

@@ -62,9 +62,18 @@ enum PillState: Equatable {
     /// Whether the pill should remain visible on screen for this state.
     var isVisible: Bool { self != .idle }
 
+    /// The fix for this state, when there's one the user can actually perform.
+    var recoveryAction: RecoveryAction? {
+        switch self {
+        case .copiedNeedsAccessibility: return .openAccessibilitySettings
+        case .microphoneUnavailable: return .openMicrophoneSettings
+        default: return nil
+        }
+    }
+
     /// Only states offering actions should accept clicks — otherwise the pill
     /// must stay click-through so it never gets in the user's way.
-    var isInteractive: Bool { self == .awaitingChoice }
+    var isInteractive: Bool { self == .awaitingChoice || recoveryAction != nil }
 
     /// States that are waiting on work, so the icon can pulse.
     var isBusy: Bool {

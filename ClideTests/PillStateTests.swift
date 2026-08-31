@@ -16,14 +16,25 @@ struct PillStateTests {
         #expect(allNonEmpty)
     }
 
-    @Test func onlyTheChoiceStateAcceptsClicks() {
-        let states: [PillState] = [
+    /// The pill must stay click-through unless it's genuinely offering
+    /// something, or it would sit in front of the user's work eating clicks.
+    @Test func onlyStatesOfferingSomethingAcceptClicks() {
+        let passive: [PillState] = [
             .idle, .listening, .transcribing, .formatting, .inserted,
-            .copiedNeedsAccessibility, .secureFieldBlocked, .error("x"),
+            .secureFieldBlocked, .copiedAfterInsertionFailed, .error("x"),
         ]
-        let noneInteractive = states.allSatisfy { !$0.isInteractive }
+        let noneInteractive = passive.allSatisfy { !$0.isInteractive }
         #expect(noneInteractive)
+
         #expect(PillState.awaitingChoice.isInteractive)
+        #expect(PillState.copiedNeedsAccessibility.isInteractive)
+    }
+
+    /// Permission problems must offer the fix, not just describe the problem.
+    @Test func permissionProblemsOfferTheirFix() {
+        #expect(PillState.copiedNeedsAccessibility.recoveryAction == .openAccessibilitySettings)
+        #expect(PillState.microphoneUnavailable("no mic").recoveryAction == .openMicrophoneSettings)
+        #expect(PillState.inserted.recoveryAction == nil)
     }
 
     @Test func idleIsTheOnlyHiddenState() {

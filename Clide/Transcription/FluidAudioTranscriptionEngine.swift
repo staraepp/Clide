@@ -45,7 +45,7 @@ actor FluidAudioTranscriptionEngine: TranscriptionEngine {
             return newManager
         } catch {
             throw TranscriptionError.modelUnavailable(
-                "Couldn't load the transcription model: \(error.localizedDescription)"
+                "Couldn't load Parakeet: \(error.localizedDescription)"
             )
         }
     }

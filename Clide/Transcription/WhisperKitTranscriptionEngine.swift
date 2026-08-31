@@ -46,7 +46,7 @@ actor WhisperKitTranscriptionEngine: TranscriptionEngine {
             return newPipe
         } catch {
             throw TranscriptionError.modelUnavailable(
-                "Couldn't load the transcription model: \(error.localizedDescription)"
+                "Couldn't load \(modelName): \(error.localizedDescription)"
             )
         }
     }

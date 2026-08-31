@@ -50,6 +50,9 @@ struct DictationPillView: View {
                 }
                 PillButton(title: "Insert", action: choiceActions.insertAsIs, isProminent: true)
             }
+            if let recovery = state.recoveryAction {
+                PillButton(title: recovery.title, action: { perform(recovery) })
+            }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 16)
@@ -79,6 +82,14 @@ struct DictationPillView: View {
         } else {
             PillSymbol(state: state, reduceMotion: reduceMotion)
                 .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+        }
+    }
+
+    private func perform(_ action: RecoveryAction) {
+        switch action {
+        case .openAccessibilitySettings: PermissionsManager.openAccessibilitySettings()
+        case .openMicrophoneSettings: PermissionsManager.openMicrophoneSettings()
+        case .openClideSettings, .retry: break
         }
     }
 

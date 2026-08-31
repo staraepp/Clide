@@ -21,7 +21,7 @@ Also note **Accessibility is not required to dictate.** Without it Clide still t
 
 ## What exists right now
 
-Everything below **builds clean with zero warnings in app code** under Swift 6 strict concurrency, and **34 unit tests pass** (`xcodebuild -project Clide.xcodeproj -scheme Clide -destination 'platform=macOS' test`).
+Everything below **builds clean with zero warnings in app code** under Swift 6 strict concurrency, and **74 unit tests pass** (`xcodebuild -project Clide.xcodeproj -scheme Clide -destination 'platform=macOS' test`).
 
 The sacred path:
 
@@ -29,12 +29,14 @@ The sacred path:
 
 Built so far, roughly spec milestones 0.1 through most of 0.5:
 
-- **Dictation**: global hotkey (remappable), toggle-to-record, Escape to cancel, floating non-activating pill with a live mic-amplitude waveform and interactive ask-each-time actions.
-- **Transcription**: `TranscriptionEngine` protocol with three implementations — WhisperKit (local), FluidAudio/Parakeet (local), Groq (BYOK cloud). `ModelManager` owns selection and caches one engine per model.
-- **Formatting**: deterministic cleanup (always), conservative filler-word removal, three-mode preferences. AI formatting preference exists but is **honestly inert** — no on-device formatter has been integrated, and the UI says so.
-- **Dashboard**: greeting, readiness card with live keycaps, today's totals led by time-saved, model list with explainable hardware-fit ratings.
-- **Onboarding**: welcome → mic → accessibility → model prep → real practice dictation → result with time saved → formatting prefs → done.
-- **Settings**: shortcut recorder, launch at login, model picker, Groq key + Test Connection, formatting, privacy, developer-data consent, Debug Mode console.
+- **Dictation**: global hotkey (remappable), toggle-to-record, Escape to cancel, floating non-activating pill with a live mic-amplitude waveform, full state coverage and interactive ask-each-time actions.
+- **Transcription**: `TranscriptionEngine` protocol with six implementations — WhisperKit, FluidAudio/Parakeet, Apple Speech (all local), plus Groq, Deepgram and AssemblyAI (BYOK cloud). `ModelManager` owns selection, engine caching, install state and download.
+- **Model catalog**: eleven models with full metadata (§12), explainable hardware-fit ratings computed from real sysctl values (§13), a card/table model browser with search and filters (§14), and existing-model discovery over an allowlist of known paths (§15).
+- **Formatting**: deterministic cleanup (always), conservative filler-word removal, and **real AI formatting** via Apple's on-device `SystemLanguageModel`, gated behind `#available(macOS 26)` and reporting a specific reason when unavailable.
+- **Dashboard**: greeting, readiness card with live keycaps, today's totals led by time-saved, recent activity (when history is on), model list, one-time Settings spotlight.
+- **Onboarding**: welcome → mic → accessibility → model prep (with discovery) → real practice dictation → result with time saved → formatting prefs → done.
+- **Settings**: shortcut recorder, launch at login, model picker + browser, all three cloud provider keys with Test Connection, formatting, privacy, developer-data consent, Debug Mode console.
+- **Privacy**: opt-in transcript history (off by default, the only place transcripts are kept), counters-only statistics, opt-in developer diagnostics.
 - **Diagnostics**: bounded local log, sanitized report, copy/export.
 
 ### PENDING USER VALIDATION
@@ -46,7 +48,11 @@ Implemented but **not yet confirmed working by a human** — I can't speak into 
 - live local transcription (WhisperKit / FluidAudio)
 - focused-field insertion
 - clipboard fallback
-- the interactive ask-each-time pill
+- the interactive ask-each-time pill (including the ✨ Format action)
+- Deepgram / AssemblyAI / Groq transcription against real keys — the request shapes were built from current official docs but no call has been made with a live key
+- Apple Speech transcription
+- Apple Intelligence formatting output quality
+- existing-model discovery actually finding anything (depends on what's on the machine)
 
 The user has been asked to run the real test (⌥+., speak, watch text land in TextEdit) but had not reported a result at the time of writing. **Ask before assuming any of it works end to end.** Development deliberately continued past this point on explicit user instruction — implemented-but-unconfirmed is an acceptable base to build on; just don't call it verified.
 
@@ -54,12 +60,12 @@ The user has been asked to run the real test (⌥+., speak, watch text land in T
 
 Things a reader might assume work but don't:
 
-- **AI formatting** does nothing. No Apple on-device model or Clide Mini formatter is wired up. `TranscriptPipeline` never applies or prompts for it.
 - **Developer-data sharing uploads nothing.** There's no Clide server. The consent toggle only unlocks Debug Mode; Settings states this outright. Don't add a fake upload.
-- **Deepgram and AssemblyAI** are not implemented — Groq is the only cloud provider.
-- **Transcript history** (§27) does not exist. Statistics are deliberately counters-only and hold no transcript text, so history is a separate feature, not an extension of statistics.
+- **AI formatting needs macOS 26 + Apple Intelligence enabled.** On anything older the picker is disabled and says why. There is no Clide Mini fallback formatter yet.
 - **Microphone selection, push-to-talk, device-change/sleep-wake handling** (§8, §7) are not implemented.
-- Accuracy/speed scores in `ModelCatalog` are hand-written approximations from published benchmarks, not measurements. Hardware-fit ratings, by contrast, are computed from this Mac's real sysctl values.
+- **Model download shows no percentage** — the pill and browser show an indeterminate spinner, because neither runtime's `prepare()` surfaces progress through the current `TranscriptionEngine` protocol.
+- **Existing-model discovery detects but doesn't yet reuse in place.** It reports what it finds; Clide still downloads its own copy into its own directory.
+- Accuracy/speed scores in `ModelCatalog` are hand-written approximations from published benchmarks, not measurements. Hardware-fit ratings, by contrast, are computed from this Mac's real sysctl values. Don't present the first two as if they were measured.
 
 ## Repo layout
 
